@@ -10,6 +10,16 @@ Class {
 	#tag : 'Model'
 }
 
+{ #category : 'enumerating' }
+FBProperties >> anySatisfy: aBlock [ 
+	^ dictionary anySatisfy: aBlock 
+]
+
+{ #category : 'accessing' }
+FBProperties >> associations [
+	^ dictionary associations 
+]
+
 { #category : 'accessing' }
 FBProperties >> at: key [ 
 	^ dictionary at: key
@@ -40,6 +50,11 @@ FBProperties >> at: key put: anObject [
 			ifNil: [ anObject ])
 ]
 
+{ #category : 'enumerating' }
+FBProperties >> do: aBlock [
+	dictionary do: aBlock 
+]
+
 { #category : 'initialization' }
 FBProperties >> initialize [ 
 	super initialize.
@@ -62,4 +77,9 @@ FBProperties >> schema [
 FBProperties >> schema: anObject [
 
 	schema := anObject
+]
+
+{ #category : 'enumerating' }
+FBProperties >> select: aBlock [
+	^ dictionary select: aBlock 
 ]
