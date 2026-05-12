@@ -280,6 +280,12 @@ FBNode >> properties [
 ]
 
 { #category : 'properties' }
+FBNode >> propertiesDo: aBlock [ 
+	properties ifNil: [ ^ self ].
+	^ properties keysAndValuesDo: aBlock 
+]
+
+{ #category : 'properties' }
 FBNode >> propertyAt: aString [ 
 	properties ifNil: [ ^ nil ].
 	^ self properties at: aString ifAbsent: [ nil ]

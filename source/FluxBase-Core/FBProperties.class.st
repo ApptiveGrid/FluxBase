@@ -61,6 +61,11 @@ FBProperties >> initialize [
 	dictionary := OrderedDictionary new.
 ]
 
+{ #category : 'enumerating' }
+FBProperties >> keysAndValuesDo: aBlock [ 
+	dictionary keysAndValuesDo: aBlock 
+]
+
 { #category : 'printing' }
 FBProperties >> printOn: aStream [ 
 	aStream << 'properties: '.
