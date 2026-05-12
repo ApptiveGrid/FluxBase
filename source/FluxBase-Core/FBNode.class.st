@@ -279,6 +279,12 @@ FBNode >> properties [
 	^ properties
 ]
 
+{ #category : 'as yet unclassified' }
+FBNode >> properties: anObject [
+
+	properties := anObject
+]
+
 { #category : 'properties' }
 FBNode >> propertiesDo: aBlock [ 
 	properties ifNil: [ ^ self ].
@@ -289,6 +295,12 @@ FBNode >> propertiesDo: aBlock [
 FBNode >> propertyAt: aString [ 
 	properties ifNil: [ ^ nil ].
 	^ self properties at: aString ifAbsent: [ nil ]
+]
+
+{ #category : 'as yet unclassified' }
+FBNode >> propertyAt: aString ifAbsent: aBlock [
+	properties ifNil: [ ^ aBlock value ].
+	^ properties at: aString ifAbsent: aBlock
 ]
 
 { #category : 'properties' }
