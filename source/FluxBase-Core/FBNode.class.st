@@ -99,8 +99,7 @@ FBNode >> asRoassalShape [
 { #category : 'accessing' }
 FBNode >> behaviorClass [
 
-	^ behaviorClass ifNil: [ 
-		behaviorClass := self defaultBehaviorClass ]
+	^ behaviorClass 
 ]
 
 { #category : 'accessing' }
@@ -198,7 +197,8 @@ FBNode >> initialize [
 	super initialize.
 	id := FBIdGenerator current newId.
 	incoming := OrderedCollection new.
-	outgoing := OrderedCollection new
+	outgoing := OrderedCollection new.
+	behaviorClass := self defaultBehaviorClass 
 ]
 
 { #category : 'as yet unclassified' }
@@ -276,18 +276,19 @@ FBNode >> propagateFlow [
 
 { #category : 'accessing' }
 FBNode >> properties [
-	^ properties ifNil: [ 
-		properties := FBProperties new ]
+	^ properties
 ]
 
 { #category : 'properties' }
 FBNode >> propertyAt: aString [ 
+	properties ifNil: [ ^ nil ].
 	^ self properties at: aString ifAbsent: [ nil ]
 ]
 
 { #category : 'properties' }
 FBNode >> propertyAt: key put: aValue [ 
-	self properties 
+	properties ifNil: [ properties := FBProperties new ].
+	properties 
 		at: key 
 		put: aValue
 ]
