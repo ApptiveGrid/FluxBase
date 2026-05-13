@@ -119,7 +119,8 @@ FBFlowInstance >> eventsOfNode: aFBNode [
 
 { #category : 'executing' }
 FBFlowInstance >> execute [ 
-	[ self executor hasPending ] whileTrue: [
+	self initializeExecutor.
+	[  self executor hasPending ] whileTrue: [
 		executor step ]
 
 ]
