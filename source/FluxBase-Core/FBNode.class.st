@@ -99,7 +99,7 @@ FBNode >> asRoassalShape [
 { #category : 'accessing' }
 FBNode >> behaviorClass [
 
-	^ behaviorClass 
+	^ behaviorClass ifNil: [ self defaultBehaviorClass ]
 ]
 
 { #category : 'accessing' }
@@ -197,8 +197,7 @@ FBNode >> initialize [
 	super initialize.
 	id := FBIdGenerator current newId.
 	incoming := OrderedCollection new.
-	outgoing := OrderedCollection new.
-	behaviorClass := self defaultBehaviorClass 
+	outgoing := OrderedCollection new
 ]
 
 { #category : 'as yet unclassified' }
