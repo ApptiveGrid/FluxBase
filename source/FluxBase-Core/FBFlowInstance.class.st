@@ -65,14 +65,13 @@ FBFlowInstance >> activationOfNode: aFBNode [
 
 { #category : 'accessing' }
 FBFlowInstance >> activations [ 
-	^ activations ifNil: [ 
-		activations := OrderedCollection new ]
+	^ activations
 ]
 
 { #category : 'events' }
 FBFlowInstance >> addEvent: aFBFlowEvent [
-
-	self events add: (aFBFlowEvent
+	events ifNil: [ events := OrderedCollection new ].
+	events add: (aFBFlowEvent
 			 flowInstance: self;
 			 yourself).
 	self announce: aFBFlowEvent
@@ -80,13 +79,13 @@ FBFlowInstance >> addEvent: aFBFlowEvent [
 
 { #category : 'announcements' }
 FBFlowInstance >> announce: aFBModelEvent [
-	self announcer announce: aFBModelEvent 
+	announcer ifNil: [ announcer := Announcer new ].
+	announcer announce: aFBModelEvent 
 ]
 
 { #category : 'accessing' }
 FBFlowInstance >> announcer [
-	^ announcer ifNil: [ 
-		announcer := Announcer new ]
+	^ announcer
 ]
 
 { #category : 'accessing' }
@@ -105,8 +104,7 @@ FBFlowInstance >> buildRootExecutor [
 
 { #category : 'accessing' }
 FBFlowInstance >> events [
-	^ events ifNil: [ 
-		events := OrderedCollection new ]
+	^ events 
 ]
 
 { #category : 'accessing' }
@@ -134,9 +132,7 @@ FBFlowInstance >> executeWith: anObject [
 
 { #category : 'accessing' }
 FBFlowInstance >> executor [ 
-	^ executor ifNil: [ 
-		executor := self buildRootExecutor.
-		executors add: executor ]
+	^ executor 
 ]
 
 { #category : 'accessing' }
@@ -169,6 +165,7 @@ FBFlowInstance >> id: anObject [
 
 { #category : 'accessing' }
 FBFlowInstance >> initialValue: anObject [
+	self initializeExecutor.
 	self executor initialValue: anObject
 ]
 
@@ -176,7 +173,17 @@ FBFlowInstance >> initialValue: anObject [
 FBFlowInstance >> initialize [ 
 	super initialize.
 	id := FBIdGenerator current newId.
+	activations := OrderedCollection new.
 	executors := OrderedCollection new.
+	
+]
+
+{ #category : 'accessing' }
+FBFlowInstance >> initializeExecutor [
+	executor ifNotNil: [ ^ self ].
+	executor := self buildRootExecutor.
+	executors add: executor.
+	
 ]
 
 { #category : 'as yet unclassified' }
@@ -204,16 +211,18 @@ FBFlowInstance >> isRootExecutor [
 { #category : 'accessing' }
 FBFlowInstance >> metadata [
 	
-	^ metadata ifNil: [metadata := FBProperties new]
+	^ metadata ifNil: [ FBProperties new]
 ]
 
 { #category : 'accessing' }
 FBFlowInstance >> metadataAt: aString [ 
+	metadata ifNil: [ KeyNotFound signalFor: aString ].
 	^ self metadata at: aString
 ]
 
 { #category : 'accessing' }
 FBFlowInstance >> metadataAt: key ifAbsent: aBlock [
+	metadata ifNil: [ ^ aBlock value ].
 	^ self metadata 
 		at: key 
 		ifAbsent: aBlock
@@ -221,6 +230,7 @@ FBFlowInstance >> metadataAt: key ifAbsent: aBlock [
 
 { #category : 'accessing' }
 FBFlowInstance >> metadataAt: key ifPresent: aBlock [
+	metadata ifNil: [ ^ nil ].
 	^ self metadata 
 		at: key 
 		ifPresent: aBlock
@@ -228,6 +238,7 @@ FBFlowInstance >> metadataAt: key ifPresent: aBlock [
 
 { #category : 'accessing' }
 FBFlowInstance >> metadataAt: key put: anObject [ 
+	metadata ifNil: [ metadata := FBProperties new ].
 	self metadata  
 		at: key 
 		put: anObject
@@ -304,4 +315,10 @@ FBFlowInstance >> step [
 FBFlowInstance >> suspended [
 
 	^ executors flatCollect:  [ :each | each suspended ]
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowInstance >> whenAnnounced: aClass do: aBlock [ 
+	announcer ifNil: [ announcer := Announcer new ].
+	announcer when: aClass do: aBlock 
 ]

@@ -28,28 +28,31 @@ FBActivation >> argument: aCollection [
 
 { #category : 'accessing' }
 FBActivation >> metadata [
-	^ metadata ifNil: [ 
-		metadata := FBActivationMetadata new 
-			schema: self metadataSchema;
-			activation: self;
-			yourself ]
+	^ metadata 
 ]
 
 { #category : 'accessing' }
 FBActivation >> metadataAt: aString [ 
-	^ self metadata at: aString
+	metadata ifNil: [ KeyNotFound signalFor: aString ].
+	^ metadata at: aString
 ]
 
 { #category : 'accessing' }
 FBActivation >> metadataAt: key ifAbsent: aBlock [
-	^ self metadata 
+	metadata ifNil: [ ^ aBlock value ].
+	^ metadata 
 		at: key 
 		ifAbsent: aBlock
 ]
 
 { #category : 'accessing' }
 FBActivation >> metadataAt: key put: anObject [ 
-	self metadata  
+	metadata ifNil: [ 
+		metadata := FBActivationMetadata new 
+			schema: self metadataSchema;
+			activation: self;
+			yourself ].
+	metadata  
 		at: key 
 		put: anObject
 ]
