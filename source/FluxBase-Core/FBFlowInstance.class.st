@@ -245,6 +245,12 @@ FBFlowInstance >> metadataAt: key put: anObject [
 		put: anObject
 ]
 
+{ #category : 'instance creation' }
+FBFlowInstance >> newActivation [ 
+	self initializeExecutor.
+	^ executor newActivation 
+]
+
 { #category : 'accessing' }
 FBFlowInstance >> nextNode [
 	^ self nextTransition target
@@ -309,6 +315,7 @@ FBFlowInstance >> state [
 
 { #category : 'executing' }
 FBFlowInstance >> step [
+	self initializeExecutor.
 	^ self executor step
 ]
 
