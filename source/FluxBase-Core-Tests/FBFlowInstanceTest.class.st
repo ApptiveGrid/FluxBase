@@ -37,6 +37,7 @@ FBFlowInstanceTest >> testCompleted [
 FBFlowInstanceTest >> testCreateFlowInstance [
 	| flowInstance |
 	flowInstance := FBFlow simpleFlow newInstance.
+	flowInstance initializeExecutor.
 	self assert: flowInstance pending size equals: 1.
 	self assert: flowInstance pending first class equals: FBStartEvent  
 
@@ -48,7 +49,7 @@ FBFlowInstanceTest >> testFlowAnnouncements [
 	flowInstance := FBFlow simpleFlow newInstance.
 	flowInstance initialValue: 7. 
 	events := OrderedCollection new.
-	flowInstance whenAnnounced: FBNodeActivationStarted  do: [ :e | events add: e ] for: self.
+	flowInstance whenAnnounced: FBNodeActivationStarted  do: [ :e | events add: e ].
 	flowInstance execute.
 	self assert: events size equals: flowInstance flow nodes size 
 ]
@@ -60,7 +61,7 @@ FBFlowInstanceTest >> testFlowAnnouncementsWithError [
 	flowInstance initialValue: 7.
 	events := OrderedCollection new.
 	flowInstance 
-		whenAnnounced: FBFlowEvent do: [ :e | events add: e ] for: self .
+		whenAnnounced: FBFlowEvent do: [ :e | events add: e ] .
 	flowInstance execute.
 	self assert: events last class equals: FBNodeActivationErrored.
 	self assert: flowInstance activations last state equals: #error 
@@ -72,7 +73,7 @@ FBFlowInstanceTest >> testFlowAnnouncementsWithSystemError [
 	flowInstance := FBFlow simpleFlowWithSystemError newInstance.
 	events := OrderedCollection new.
 	flowInstance 
-		whenAnnounced: FBFlowEvent do: [ :e | events add: e ] for: self .
+		whenAnnounced: FBFlowEvent do: [ :e | events add: e ].
 	flowInstance initialValue: 7.
 	self 
 		should: [ flowInstance execute ]

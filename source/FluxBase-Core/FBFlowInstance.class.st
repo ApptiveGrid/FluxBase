@@ -328,7 +328,8 @@ FBFlowInstance >> suspended [
 ]
 
 { #category : 'as yet unclassified' }
-FBFlowInstance >> whenAnnounced: aClass do: aBlock [ 
+FBFlowInstance >> whenAnnounced: aClass do: aBlock [
+
 	announcer ifNil: [ announcer := Announcer new ].
-	announcer when: aClass do: aBlock 
+	announcer when: aClass do: aBlock for: aBlock receiver
 ]

@@ -21,7 +21,6 @@ FBTestTaskBehavior class >> propertySchema [
 
 { #category : 'execution' }
 FBTestTaskBehavior >> execute [ 
-	self metadata 
-		at: #status put: 200
+	self activation metadataAt: #status put: 200
 	
 ]
