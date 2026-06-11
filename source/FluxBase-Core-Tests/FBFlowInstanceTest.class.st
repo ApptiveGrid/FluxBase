@@ -72,7 +72,7 @@ FBFlowInstanceTest >> testFlowAnnouncementsWithSystemError [
 	flowInstance := FBFlow simpleFlowWithSystemError newInstance.
 	events := OrderedCollection new.
 	flowInstance 
-		whenAnnounced: FBFlowEvent do: [ :e | events add: e ] for: self .
+		whenAnnounced: FBFlowEvent do: [ :e | events add: e ].
 	flowInstance initialValue: 7.
 	self 
 		should: [ flowInstance execute ]
