@@ -4,7 +4,6 @@ Class {
 	#instVars : [
 		'id',
 		'flow',
-		'executor',
 		'executors',
 		'announcer',
 		'events',
@@ -136,12 +135,6 @@ FBFlowInstance >> executeWith: anObject [
 ]
 
 { #category : 'accessing' }
-FBFlowInstance >> executor [ 
-
-	^ executor 
-]
-
-{ #category : 'accessing' }
 FBFlowInstance >> executors [
 
 	^ executors
@@ -251,7 +244,7 @@ FBFlowInstance >> metadataAt: key put: anObject [
 { #category : 'instance creation' }
 FBFlowInstance >> newActivation [ 
 	self initializeExecutor.
-	^ executor newActivation 
+	^ self currentExecutor newActivation 
 ]
 
 { #category : 'accessing' }
@@ -261,7 +254,7 @@ FBFlowInstance >> nextNode [
 
 { #category : 'accessing' }
 FBFlowInstance >> nextTransition [
-	^ executor firstPending
+	^ self currentExecutor firstPending
 ]
 
 { #category : 'accessing' }
