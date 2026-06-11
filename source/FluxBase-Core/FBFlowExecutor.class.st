@@ -2,9 +2,7 @@ Class {
 	#name : 'FBFlowExecutor',
 	#superclass : 'FBBaseExecutor',
 	#instVars : [
-		'initialValue',
-		'state',
-		'otherExecutor'
+		'initialValue'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',

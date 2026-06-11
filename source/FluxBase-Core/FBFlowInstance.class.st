@@ -90,9 +90,8 @@ FBFlowInstance >> announcer [
 
 { #category : 'accessing' }
 FBFlowInstance >> atEnd [
-	^ (executor = self rootExecutor) and: [  
-		executors allSatisfy: [ :each | each atEnd ]
-		].
+	^  executors allSatisfy: [ :each | each atEnd ]
+		
 ]
 
 { #category : 'finalization' }
@@ -100,6 +99,11 @@ FBFlowInstance >> buildRootExecutor [
 	^ FBFlowExecutor new 
 			flowInstance: self;
 			scheduleStart 
+]
+
+{ #category : 'executing' }
+FBFlowInstance >> currentExecutor [
+	^ executors last
 ]
 
 { #category : 'accessing' }
@@ -120,8 +124,8 @@ FBFlowInstance >> eventsOfNode: aFBNode [
 { #category : 'executing' }
 FBFlowInstance >> execute [ 
 	self initializeExecutor.
-	[  self executor hasPending ] whileTrue: [
-		executor step ]
+	[  self currentExecutor hasPending ] whileTrue: [
+		self currentExecutor step ]
 
 ]
 
@@ -133,6 +137,7 @@ FBFlowInstance >> executeWith: anObject [
 
 { #category : 'accessing' }
 FBFlowInstance >> executor [ 
+
 	^ executor 
 ]
 
@@ -167,7 +172,7 @@ FBFlowInstance >> id: anObject [
 { #category : 'accessing' }
 FBFlowInstance >> initialValue: anObject [
 	self initializeExecutor.
-	self executor initialValue: anObject
+	self rootExecutor initialValue: anObject
 ]
 
 { #category : 'initialization' }
@@ -181,10 +186,8 @@ FBFlowInstance >> initialize [
 
 { #category : 'accessing' }
 FBFlowInstance >> initializeExecutor [
-	executor ifNotNil: [ ^ self ].
-	executor := self buildRootExecutor.
-	executors add: executor.
-	
+	executors ifNotEmpty: [ ^ self ].
+	executors add: self buildRootExecutor	
 ]
 
 { #category : 'as yet unclassified' }
@@ -200,13 +203,13 @@ FBFlowInstance >> inspectionFlow: aBuilder [
 
 { #category : 'testing' }
 FBFlowInstance >> isDone [
-	^ executor isDone
+	^ self currentExecutor isDone
 ]
 
 { #category : 'testing' }
 FBFlowInstance >> isRootExecutor [
 
-	^ self rootExecutor = self executor
+	^ self rootExecutor = self currentExecutor
 ]
 
 { #category : 'accessing' }
@@ -269,12 +272,12 @@ FBFlowInstance >> parallelExecutorFrom: aNode ifAbsent: aBlock [
 
 { #category : 'accessing' }
 FBFlowInstance >> pending [
-	^ self executor pending
+	^ self currentExecutor pending
 ]
 
 { #category : 'as yet unclassified' }
 FBFlowInstance >> popExecutor: anExecutor [ 
-	executor := anExecutor
+	^ executors removeLast 
 ]
 
 { #category : 'printing' }
@@ -285,16 +288,15 @@ FBFlowInstance >> printOn: aStream [
 { #category : 'as yet unclassified' }
 FBFlowInstance >> pushExecutor: anExecutor [
  
-	executors add: anExecutor.
-	executor := anExecutor 
+	executors add: (anExecutor 
 		flowInstance: self;
-		suspendedExecutor: executor;
-		yourself
+		suspendedExecutor: executors last;
+		yourself)
 ]
 
 { #category : 'finalization' }
 FBFlowInstance >> rootExecutor [
-	^ executor rootExecutor
+	^ executors first
 ]
 
 { #category : 'accessing' }
@@ -316,7 +318,7 @@ FBFlowInstance >> state [
 { #category : 'executing' }
 FBFlowInstance >> step [
 	self initializeExecutor.
-	^ self executor step
+	^ self currentExecutor step
 ]
 
 { #category : 'accessing' }

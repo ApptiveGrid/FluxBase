@@ -9,7 +9,7 @@ Class {
 { #category : 'execution' }
 FBJoinNodeBehavior >> execute [ 
 	| executor |
-	executor := activation flowInstance executor.
+	executor := activation flowInstance currentExecutor.
 	executor atEnd ifTrue: [ 
 		executor stop .
 		activation values: activation arguments.
