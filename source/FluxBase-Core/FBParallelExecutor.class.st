@@ -39,6 +39,20 @@ FBParallelExecutor >> atEnd [
 	^((index = list size) and: [ pending isEmpty ])and:[suspended isEmpty]
 ]
 
+{ #category : 'services' }
+FBParallelExecutor >> continue [
+    (pending isEmpty and: [ index < list size ]) ifTrue: [
+        index := index + 1.
+        pending addAll: node outgoing ].
+
+    pending isEmpty ifFalse: [ ^ self ].
+
+    suspended isEmpty ifFalse: [ ^ self ].
+
+    (self activationOf: node) done.
+    self stop
+]
+
 { #category : 'execution' }
 FBParallelExecutor >> execute [ 
 	[   
@@ -73,6 +87,12 @@ FBParallelExecutor >> isLastIndex [
 FBParallelExecutor >> isParallel [
 
 	^ true
+]
+
+{ #category : 'accessing' }
+FBParallelExecutor >> lastValueOf: aFBNode [
+    aFBNode == node ifTrue: [ ^ list ].
+    ^ super lastValueOf: aFBNode
 ]
 
 { #category : 'accessing' }
@@ -115,6 +135,11 @@ FBParallelExecutor >> outputFor: anActivation [
 	^ anActivation value at: self index .
 ]
 
+{ #category : 'services' }
+FBParallelExecutor >> resumeAfter: anExecutor [
+    self continue
+]
+
 { #category : 'private' }
 FBParallelExecutor >> shouldFollowTransition: transition with: value [
 	"this parallel executor has been instantiated right after activating a parallel node.
@@ -127,17 +152,19 @@ FBParallelExecutor >> shouldFollowTransition: transition with: value [
 
 { #category : 'services' }
 FBParallelExecutor >> step [
-
 	| transition lastValue values |
 	transition := pending removeFirst.
 	values := transition source lastValueIn: self.
 	lastValue := values at: index.
+
 	(self shouldFollowTransition: transition with: lastValue) ifTrue: [
 		self activateTransition: transition with: lastValue ].
-	(pending isEmpty and: [ index < list size ]) ifTrue: [
-		index := index + 1.
-		pending addAll: node outgoing ].
-	pending isEmpty ifFalse: [ ^ self ].
-	(self activationOf: node) done.
-	self stop
+
+	"In case this executor is the current one we continue. If another 
+	executor has been pushed we just return to be suspended an continued
+	after the child executor has been popped"
+   flowInstance executor == self
+        ifTrue: [ self continue ].
+
+    
 ]
