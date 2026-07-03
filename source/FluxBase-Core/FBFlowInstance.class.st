@@ -306,10 +306,10 @@ FBFlowInstance >> start [
 FBFlowInstance >> state [
 
 	(executor isNil or: [self rootExecutor isCreated]) ifTrue: [ ^ #created ].
-	(self isRootExecutor not or: [self rootExecutor isRunning]) ifTrue: [ ^ #running ].
 	(self executors anySatisfy:[:each | each hasErrors]) ifTrue: [ ^ #error ].
 	(self executors anySatisfy:[:each | each isWaiting])  ifTrue: [ ^ #waiting ].
-	(self executors anySatisfy:[:each | each isDone]) ifTrue: [ ^ #done ].
+	(self executors allSatisfy:[:each | each isDone]) ifTrue: [ ^ #done ].
+	(self isRootExecutor not or: [self rootExecutor isRunning]) ifTrue: [ ^ #running ].
 
 ]
 

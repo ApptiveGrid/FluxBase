@@ -103,6 +103,34 @@ FBFlowTest >> testIsNotCyclic [
 ]
 
 { #category : 'tests' }
+FBFlowTest >> testNestedParallelNodePassesInnerElements [
+    | start outer inner collect end flow instance seen |
+
+    seen := OrderedCollection new.
+
+    start := FBStartEvent new.
+    outer := start addOutgoingNode: (FBParallelNode named: 'outer').
+    inner := outer addOutgoingNode: (FBParallelNode named: 'inner').
+
+    collect := inner addOutgoingNode:
+        ((FBPluggableTask named: 'collect')
+            block: [ :activation |
+                seen add: activation argument.
+                activation value: activation argument.
+                activation done ];
+            yourself).
+
+    end := collect addOutgoingNode: FBEndEvent new.
+
+    flow := FBFlow new start: start.
+    instance := flow newInstance.
+
+    instance executeWith: { #(1 2). #(3 4) }.
+
+    self assert: seen asArray equals: #(1 2 3 4)
+]
+
+{ #category : 'tests' }
 FBFlowTest >> testNodeWithId [
 	| flow id |
 	flow := FBFlow simpleFlow.

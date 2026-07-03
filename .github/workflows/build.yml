@@ -17,7 +17,7 @@ jobs:
   build:
     strategy:
       matrix:
-        pharoversion: [ Pharo64-alpha, Pharo64-13, Pharo64-12, Pharo64-11 ]
+        pharoversion: [ Pharo64-13, Pharo64-12, Pharo64-11 ]
     name: ${{ matrix.pharoversion }}
     runs-on: ubuntu-latest
     steps:
@@ -25,8 +25,8 @@ jobs:
       - uses: hpi-swa/setup-smalltalkCI@v1
         id: smalltalkci
         with:
-          smalltalk-version: ${{ matrix.pharoversion }}
-      - run: smalltalkci -s ${{ steps.smalltalkci.outputs.smalltalk-version }}
+          smalltalk-image: ${{ matrix.pharoversion }}
+      - run: smalltalkci -s ${{ steps.smalltalkci.outputs.smalltalk-image }}
         shell: bash
         timeout-minutes: 15
 

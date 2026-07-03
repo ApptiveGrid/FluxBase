@@ -130,6 +130,12 @@ FBBaseExecutor >> pending [
 	^ pending
 ]
 
+{ #category : 'as yet unclassified' }
+FBBaseExecutor >> resumeAfter: anExecutor [
+	
+	^ self
+]
+
 { #category : 'finalization' }
 FBBaseExecutor >> rootExecutor [
 	^ suspendedExecutor 
@@ -145,7 +151,11 @@ FBBaseExecutor >> scheduleStart [
 
 { #category : 'accessing' }
 FBBaseExecutor >> stop [
-	flowInstance popExecutor: suspendedExecutor 
+	| parent |
+	parent := suspendedExecutor.
+	flowInstance popExecutor: parent.
+	parent ifNotNil: [
+		parent resumeAfter: self ]
 ]
 
 { #category : 'as yet unclassified' }
