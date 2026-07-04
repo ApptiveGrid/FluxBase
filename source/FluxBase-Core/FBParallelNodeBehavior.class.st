@@ -17,6 +17,10 @@ FBParallelNodeBehavior >> execute [
 	activation flowInstance pushExecutor: (FBParallelExecutor new
 			 node: activation node;
 			 list: activation argument).
-	activation value: activation argument.
+	self flag: #todo.
+	"this is a hack to allow a frontend to determine which will be the payload
+	when the parallel node runs the loop. This should not be the output but an 
+	extra property"
+	activation value: activation argument first.
 	
 ]
