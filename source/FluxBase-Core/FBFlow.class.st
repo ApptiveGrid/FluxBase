@@ -335,7 +335,7 @@ FBFlow >> transitionClass [
 FBFlow >> transitionWithId: aString [ 
 	^ self 
 		transitionWithId: aString 
-		ifAbsent: [ FBTranstionNotFound signal: 'transition with id ', aString asString, ' not found' ]
+		ifAbsent: [ FBTransitionNotFound signal: 'transition with id ', aString asString, ' not found' ]
 ]
 
 { #category : 'querying' }
