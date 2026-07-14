@@ -85,7 +85,7 @@ FBFlow class >> parallelFlowJoined [
 	parallel := start addOutgoingNode: (FBParallelNode named: 'parallel fork').
 	p1 := parallel addOutgoingNode: (FBTestTask named: 'p1 task').
 	p2 := p1 addOutgoingNode: (FBTestTask named: 'p2 task').
-	join := p2 addOutgoingNode: (FBJoinNode named: 'join').
+	join := p2 addOutgoingNode: (FBParallelJoinNode named: 'join').
 	end := join addOutgoingNode: FBEndEvent new.
 	
 	^ FBFlow new start: start

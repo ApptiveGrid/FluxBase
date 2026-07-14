@@ -1,5 +1,5 @@
 Class {
-	#name : 'FBJoinNode',
+	#name : 'FBParallelJoinNode',
 	#superclass : 'FBTask',
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -7,6 +7,6 @@ Class {
 }
 
 { #category : 'as yet unclassified' }
-FBJoinNode >> defaultBehaviorClass [
-	^ FBJoinNodeBehavior
+FBParallelJoinNode >> defaultBehaviorClass [
+	^ FBParallelJoinNodeBehavior
 ]

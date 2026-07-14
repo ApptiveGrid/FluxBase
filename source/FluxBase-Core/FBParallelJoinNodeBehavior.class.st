@@ -1,5 +1,5 @@
 Class {
-	#name : 'FBJoinNodeBehavior',
+	#name : 'FBParallelJoinNodeBehavior',
 	#superclass : 'FBNodeBehavior',
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -7,10 +7,10 @@ Class {
 }
 
 { #category : 'execution' }
-FBJoinNodeBehavior >> execute [ 
+FBParallelJoinNodeBehavior >> execute [
 	| executor |
 	executor := activation flowInstance executor.
-	executor atEnd ifTrue: [ 
+	executor atEnd ifTrue: [
 		executor stop .
 		activation values: activation arguments.
 		activation followAllOutgoing ]
