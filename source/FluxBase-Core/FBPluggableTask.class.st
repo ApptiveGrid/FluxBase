@@ -10,11 +10,12 @@ Class {
 }
 
 { #category : 'instance creation' }
-FBPluggableTask >> activateWith: anActivation [ 	
-	
+FBPluggableTask >> activateWith: anActivation [
+
 	block cull: anActivation.
+	anActivation done.
 	anActivation followAll: self outgoing.
-	
+
 ]
 
 { #category : 'accessing' }
