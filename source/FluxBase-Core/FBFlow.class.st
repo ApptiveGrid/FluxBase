@@ -225,7 +225,7 @@ FBFlow class >> withCycleForce [
 ]
 
 { #category : 'visiting' }
-FBFlow >> acceptFingerBoard: aFBVisitor [ 
+FBFlow >> acceptFluxBase: aFBVisitor [
 	^ aFBVisitor visitFlow: self
 ]
 

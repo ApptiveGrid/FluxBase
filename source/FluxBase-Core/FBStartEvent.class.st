@@ -13,8 +13,8 @@ FBStartEvent class >> typeName [
 ]
 
 { #category : 'visiting' }
-FBStartEvent >> acceptFingerBoard: aFBVisitor [ 
-	^ aFBVisitor visitStartEvent: self 
+FBStartEvent >> acceptFluxBase: aFBVisitor [
+	^ aFBVisitor visitStartEvent: self
 ]
 
 { #category : 'adding' }
