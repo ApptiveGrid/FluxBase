@@ -7,8 +7,8 @@ Class {
 }
 
 { #category : 'execution' }
-FBWaitForConditionBehavior >> execute [ 
+FBWaitForConditionBehavior >> execute [
 	(self node evaluateConditionWith: activation argument)
 		ifTrue: [ activation followAll: self node outgoing ]
-		ifFalse: [ .activation waitForNode: self ]
+		ifFalse: [ activation waitForNode: self node ]
 ]
