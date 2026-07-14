@@ -91,11 +91,6 @@ FBNode >> addTo: aFBNode [
 	^ self
 ]
 
-{ #category : 'converting' }
-FBNode >> asRoassalShape [
-	^ RSLabel new text: 'N/A'
-]
-
 { #category : 'accessing' }
 FBNode >> behaviorClass [
 
@@ -200,18 +195,8 @@ FBNode >> initialize [
 	outgoing := OrderedCollection new
 ]
 
-{ #category : 'as yet unclassified' }
-FBNode >> inspectionFlow: aBuilder [
-	<inspectorPresentationOrder: 0 title: 'flow'>
-	^ aBuilder newRoassal 
-		canvas: (FBFlowMapBuilder new 
-			nodes: self neighbourNodes;
-			build )
-		yourself
-]
-
 { #category : 'accessing' }
-FBNode >> lastValueIn: aFBFlowExecutor [ 
+FBNode >> lastValueIn: aFBFlowExecutor [
 	^ aFBFlowExecutor lastValueOf: self
 ]
 
