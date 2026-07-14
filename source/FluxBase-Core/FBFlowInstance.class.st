@@ -187,17 +187,6 @@ FBFlowInstance >> initializeExecutor [
 	
 ]
 
-{ #category : 'as yet unclassified' }
-FBFlowInstance >> inspectionFlow: aBuilder [ 
-	<inspectorPresentationOrder: 0 title: 'flow'>
-	^ aBuilder newRoassal 
-		canvas: (FBFlowMapBuilder new 
-			nodes: flow nodes;
-			activations: self rootExecutor activations;
-			build )
-		yourself
-]
-
 { #category : 'testing' }
 FBFlowInstance >> isDone [
 	^ executor isDone

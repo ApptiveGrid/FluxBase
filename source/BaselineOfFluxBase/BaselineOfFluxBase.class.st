@@ -14,8 +14,8 @@ BaselineOfFluxBase >> baseline: spec [
 				spec requires: #() ];
 			package: 'FluxBase-Core-Tests' with: [ 
 				spec requires: #('FluxBase-Core') ];
-			package: 'FluxBase-Roassal' with: [ 
-				spec requires: #() ].
+			package: 'FluxBase-Roassal' with: [
+				spec requires: #('FluxBase-Core') ].
 			
 		spec 
 			group: 'Core' with: #('FluxBase-Core' 'FluxBase-Core-Tests');
