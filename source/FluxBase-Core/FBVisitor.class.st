@@ -8,7 +8,7 @@ Class {
 
 { #category : 'visiting' }
 FBVisitor >> visit: aFBObject [
-	^ aFBObject acceptFingerBoard: self
+	^ aFBObject acceptFluxBase: self
 ]
 
 { #category : 'visiting' }

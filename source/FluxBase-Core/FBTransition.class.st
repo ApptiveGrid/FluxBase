@@ -25,7 +25,7 @@ FBTransition >> --> aNode [
 ]
 
 { #category : 'visiting' }
-FBTransition >> acceptFingerBoard: aVisitor [ 
+FBTransition >> acceptFluxBase: aVisitor [
 	^ aVisitor visitTransition: self
 ]
 
