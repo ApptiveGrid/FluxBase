@@ -178,3 +178,34 @@ FBFlowInstanceTest >> testStepping [
 	self assert: flowInstance isDone.
 	self assert: flowInstance atEnd equals: true
 ]
+
+{ #category : 'tests' }
+FBFlowInstanceTest >> testResumeWaitingAtContinuesTheFlow [
+	| flow instance waitNode |
+	flow := FBFlow simpleWaitFlow.
+	instance := flow newInstance.
+	instance executeWith: 4.
+
+	self deny: instance atEnd.
+	self assert: instance suspended size equals: 1.
+	waitNode := instance suspended first.
+
+	instance resumeWaitingAt: waitNode with: 4.
+	instance execute.
+
+	self assert: instance atEnd.
+	self assert: instance state equals: #done.
+	self assert: instance suspended isEmpty
+]
+
+{ #category : 'tests' }
+FBFlowInstanceTest >> testResumeWaitingAtRaisesWhenNodeIsNotWaiting [
+	| flow instance |
+	flow := FBFlow simpleFlow.
+	instance := flow newInstance.
+	instance executeWith: 7.
+
+	self
+		should: [ instance resumeWaitingAt: flow start with: nil ]
+		raise: FBNodeNotWaiting
+]
