@@ -303,6 +303,18 @@ FBFlowInstance >> state [
 ]
 
 { #category : 'executing' }
+FBFlowInstance >> resumeWaitingAt: aNode with: aValue [
+	| holder activation |
+	holder := self executors
+		detect: [ :each | each suspended includes: aNode ]
+		ifNone: [ ^ FBNodeNotWaiting signal: 'node is not currently waiting' ].
+	activation := holder activationOf: aNode.
+	holder suspended remove: aNode.
+	activation value: aValue.
+	activation followAllOutgoing.
+]
+
+{ #category : 'executing' }
 FBFlowInstance >> step [
 	self initializeExecutor.
 	^ self executor step
