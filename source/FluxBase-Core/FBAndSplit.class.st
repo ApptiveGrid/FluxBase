@@ -1,5 +1,5 @@
 Class {
-	#name : 'FBExclusiveGateway',
+	#name : 'FBAndSplit',
 	#superclass : 'FBSplitGateway',
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -7,12 +7,12 @@ Class {
 }
 
 { #category : 'instance creation' }
-FBExclusiveGateway class >> typeName [
+FBAndSplit class >> typeName [
 
-	^ #exclusiveGateway
+	^ #andSplit
 ]
 
 { #category : 'accessing' }
-FBExclusiveGateway >> defaultBehaviorClass [
-	^ FBExclusiveGatewayBehavior 
+FBAndSplit >> defaultBehaviorClass [
+	^ FBAndSplitBehavior
 ]
