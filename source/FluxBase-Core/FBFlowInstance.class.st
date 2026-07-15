@@ -281,6 +281,18 @@ FBFlowInstance >> pushExecutor: anExecutor [
 		yourself
 ]
 
+{ #category : 'executing' }
+FBFlowInstance >> resumeWaitingAt: aNode with: aValue [
+	| holder activation |
+	holder := self executors
+		detect: [ :each | each suspended includes: aNode ]
+		ifNone: [ ^ FBNodeNotWaiting signal: 'node is not currently waiting' ].
+	activation := holder activationOf: aNode.
+	holder suspended remove: aNode.
+	activation value: aValue.
+	activation followAllOutgoing.
+]
+
 { #category : 'finalization' }
 FBFlowInstance >> rootExecutor [
 	^ executor rootExecutor
@@ -300,18 +312,6 @@ FBFlowInstance >> state [
 	(self executors allSatisfy:[:each | each isDone]) ifTrue: [ ^ #done ].
 	(self isRootExecutor not or: [self rootExecutor isRunning]) ifTrue: [ ^ #running ].
 
-]
-
-{ #category : 'executing' }
-FBFlowInstance >> resumeWaitingAt: aNode with: aValue [
-	| holder activation |
-	holder := self executors
-		detect: [ :each | each suspended includes: aNode ]
-		ifNone: [ ^ FBNodeNotWaiting signal: 'node is not currently waiting' ].
-	activation := holder activationOf: aNode.
-	holder suspended remove: aNode.
-	activation value: aValue.
-	activation followAllOutgoing.
 ]
 
 { #category : 'executing' }

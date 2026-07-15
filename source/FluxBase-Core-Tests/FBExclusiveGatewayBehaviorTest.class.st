@@ -29,24 +29,26 @@ FBExclusiveGatewayBehaviorTest >> testExactlyOneMatchFollowsThatTransition [
 ]
 
 { #category : 'tests' }
-FBExclusiveGatewayBehaviorTest >> testNoMatchWithoutDefaultErrors [
+FBExclusiveGatewayBehaviorTest >> testFallsBackToDefaultTransitionWhenNoConditionMatches [
 	| start gateway a b end flow instance |
 	start := FBStartEvent new.
 	gateway := FBExclusiveGateway named: 'choice'.
 	a := FBTask named: 'a'.
-	b := FBTask named: 'b'.
+	b := FBTask named: 'default'.
 	end := FBEndEvent new.
 
 	start --> gateway.
-	gateway --> (a when: [ :x | x > 10 ]) --> end.
-	gateway --> (b when: [ :x | x > 20 ]) --> end.
+	gateway --> (a when: [ :x | x > 100 ]) --> end.
+	gateway --> b --> end.
 
 	flow := FBFlow new start: start.
 	instance := flow newInstance.
 	instance executeWith: 7.
 
-	self assert: instance state equals: #error.
-	self assert: instance activations last state equals: #error
+	self assert: instance atEnd.
+	self assert: instance state equals: #done.
+	self assert: (instance activations anySatisfy: [ :each | each node = b ]).
+	self deny: (instance activations anySatisfy: [ :each | each node = a ])
 ]
 
 { #category : 'tests' }
@@ -71,24 +73,22 @@ FBExclusiveGatewayBehaviorTest >> testMultipleMatchesError [
 ]
 
 { #category : 'tests' }
-FBExclusiveGatewayBehaviorTest >> testFallsBackToDefaultTransitionWhenNoConditionMatches [
+FBExclusiveGatewayBehaviorTest >> testNoMatchWithoutDefaultErrors [
 	| start gateway a b end flow instance |
 	start := FBStartEvent new.
 	gateway := FBExclusiveGateway named: 'choice'.
 	a := FBTask named: 'a'.
-	b := FBTask named: 'default'.
+	b := FBTask named: 'b'.
 	end := FBEndEvent new.
 
 	start --> gateway.
-	gateway --> (a when: [ :x | x > 100 ]) --> end.
-	gateway --> b --> end.
+	gateway --> (a when: [ :x | x > 10 ]) --> end.
+	gateway --> (b when: [ :x | x > 20 ]) --> end.
 
 	flow := FBFlow new start: start.
 	instance := flow newInstance.
 	instance executeWith: 7.
 
-	self assert: instance atEnd.
-	self assert: instance state equals: #done.
-	self assert: (instance activations anySatisfy: [ :each | each node = b ]).
-	self deny: (instance activations anySatisfy: [ :each | each node = a ])
+	self assert: instance state equals: #error.
+	self assert: instance activations last state equals: #error
 ]

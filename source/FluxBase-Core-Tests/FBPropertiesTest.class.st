@@ -6,14 +6,6 @@ Class {
 }
 
 { #category : 'tests' }
-FBPropertiesTest >> testAtPutAndAt [
-	| props |
-	props := FBProperties new.
-	props at: #name put: 'Ada'.
-	self assert: (props at: #name) equals: 'Ada'
-]
-
-{ #category : 'tests' }
 FBPropertiesTest >> testAtIfAbsentReturnsBlockValueWhenMissing [
 	| props |
 	props := FBProperties new.
@@ -30,15 +22,11 @@ FBPropertiesTest >> testAtIfPresentCallsBlockWithValue [
 ]
 
 { #category : 'tests' }
-FBPropertiesTest >> testKeysAndValuesDoIteratesAllEntries [
-	| props seen |
+FBPropertiesTest >> testAtPutAndAt [
+	| props |
 	props := FBProperties new.
-	props at: #a put: 1.
-	props at: #b put: 2.
-	seen := Dictionary new.
-	props keysAndValuesDo: [ :k :v | seen at: k put: v ].
-	self assert: (seen at: #a) equals: 1.
-	self assert: (seen at: #b) equals: 2
+	props at: #name put: 'Ada'.
+	self assert: (props at: #name) equals: 'Ada'
 ]
 
 { #category : 'tests' }
@@ -61,4 +49,16 @@ FBPropertiesTest >> testAtPutWithoutSchemaEntryKeepsRawValue [
 	props schema: schema.
 	props at: #other put: 42.
 	self assert: (props at: #other) equals: 42
+]
+
+{ #category : 'tests' }
+FBPropertiesTest >> testKeysAndValuesDoIteratesAllEntries [
+	| props seen |
+	props := FBProperties new.
+	props at: #a put: 1.
+	props at: #b put: 2.
+	seen := Dictionary new.
+	props keysAndValuesDo: [ :k :v | seen at: k put: v ].
+	self assert: (seen at: #a) equals: 1.
+	self assert: (seen at: #b) equals: 2
 ]

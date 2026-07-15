@@ -14,36 +14,6 @@ FBFlowTest >> testAllNodes [
 ]
 
 { #category : 'tests' }
-FBFlowTest >> testEndNodesFindsSingleEnd [
-	| flow |
-	flow := FBFlow simpleFlow.
-	self assert: flow endNodes size equals: 1.
-	self assert: flow endNodes anyOne equals: flow end
-]
-
-{ #category : 'tests' }
-FBFlowTest >> testEndNodesFindsAllEndsInABranchingFlow [
-	| start gateway a b successEnd failureEnd flow |
-	start := FBStartEvent new.
-	gateway := FBExclusiveGateway named: 'choice'.
-	a := FBTask named: 'a'.
-	b := FBTask named: 'b'.
-	successEnd := FBEndEvent new.
-	failureEnd := FBEndEvent new.
-
-	start --> gateway.
-	gateway --> (a when: [ :x | x > 0 ]) --> successEnd.
-	gateway --> (b when: [ :x | x <= 0 ]) --> failureEnd.
-
-	flow := FBFlow new start: start.
-
-	self assert: flow endNodes size equals: 2.
-	self assert: (flow endNodes includes: successEnd).
-	self assert: (flow endNodes includes: failureEnd).
-	self assert: (flow end isKindOf: FBEndEvent)
-]
-
-{ #category : 'tests' }
 FBFlowTest >> testCreateFlow [ 
 	| start end intermediate flow |
 	start := FBStartEvent new.
@@ -87,6 +57,36 @@ FBFlowTest >> testEndNodeNoOutgoing [
 	self 
 		should: [ flow end addOutgoingNode: FBNode new ]
 		raise: FBCannotAddTransition 
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testEndNodesFindsAllEndsInABranchingFlow [
+	| start gateway a b successEnd failureEnd flow |
+	start := FBStartEvent new.
+	gateway := FBExclusiveGateway named: 'choice'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	successEnd := FBEndEvent new.
+	failureEnd := FBEndEvent new.
+
+	start --> gateway.
+	gateway --> (a when: [ :x | x > 0 ]) --> successEnd.
+	gateway --> (b when: [ :x | x <= 0 ]) --> failureEnd.
+
+	flow := FBFlow new start: start.
+
+	self assert: flow endNodes size equals: 2.
+	self assert: (flow endNodes includes: successEnd).
+	self assert: (flow endNodes includes: failureEnd).
+	self assert: (flow end isKindOf: FBEndEvent)
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testEndNodesFindsSingleEnd [
+	| flow |
+	flow := FBFlow simpleFlow.
+	self assert: flow endNodes size equals: 1.
+	self assert: flow endNodes anyOne equals: flow end
 ]
 
 { #category : 'tests' }
@@ -291,4 +291,50 @@ FBFlowTest >> testTransitionWithId [
 	flow := FBFlow simpleFlow.
 	transition := flow start outgoing first.
 	self assert: (flow transitionWithId: transition id) equals: transition
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowTest >> testValidatePassesForWellFormedSplitAndMergeGateways [
+	| start gateway a b merge end flow |
+	start := FBStartEvent new.
+	gateway := FBExclusiveGateway named: 'g'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	merge := FBSimpleMerge named: 'm'.
+	end := FBEndEvent new.
+	start --> gateway.
+	gateway --> (a when: [ :x | x >= 5 ]) --> merge.
+	gateway --> (b when: [ :x | x < 5 ]) --> merge.
+	merge --> end.
+	flow := FBFlow new start: start.
+	self shouldnt: [ flow validate ] raise: FBGatewayMissingBranches
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowTest >> testValidateSignalsWhenMergeGatewayHasFewerThanTwoIncoming [
+	| start merge a end flow |
+	start := FBStartEvent new.
+	merge := FBSimpleMerge named: 'm'.
+	a := FBTask named: 'a'.
+	end := FBEndEvent new.
+	start --> a --> merge --> end.
+	flow := FBFlow new start: start.
+	self
+		should: [ flow validate ]
+		raise: FBGatewayMissingBranches
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowTest >> testValidateSignalsWhenSplitGatewayHasFewerThanTwoOutgoing [
+	| start gateway a end flow |
+	start := FBStartEvent new.
+	gateway := FBExclusiveGateway named: 'g'.
+	a := FBTask named: 'a'.
+	end := FBEndEvent new.
+	start --> gateway.
+	gateway --> (a when: [ :x | true ]) --> end.
+	flow := FBFlow new start: start.
+	self
+		should: [ flow validate ]
+		raise: FBGatewayMissingBranches
 ]

@@ -353,9 +353,14 @@ FBFlow >> transitionWithId: aString ifAbsent: aBlock [
 ]
 
 { #category : 'accessing' }
-FBFlow >> validate [ 
-	(FBTopologicalSorter new 	
-		nodes: nodesMap values;
+FBFlow >> validate [
+	(FBTopologicalSorter new
+			nodes: nodesMap values;
 		isAcyclic)
-		ifFalse: [ FBFlowIsCyclic  signal: 'cycle detected'].
+		ifFalse: [ FBFlowIsCyclic signal: 'cycle detected'].
+	self nodes do: [ :node |
+		((node isKindOf: FBSplitGateway) and: [ node outgoing size < 2 ])
+			ifTrue: [ FBGatewayMissingBranches signal: 'split gateway ''', node name asString, ''' needs at least 2 outgoing transitions' ].
+		((node isKindOf: FBMergeGateway) and: [ node incoming size < 2 ])
+			ifTrue: [ FBGatewayMissingBranches signal: 'merge gateway ''', node name asString, ''' needs at least 2 incoming transitions' ] ]
 ]
