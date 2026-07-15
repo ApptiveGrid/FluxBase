@@ -6,12 +6,6 @@ Class {
 }
 
 { #category : 'tests' }
-FBGatewayTest >> testGatewayIsAbstractOnlyForTheBaseClass [
-	self assert: FBGateway isAbstract.
-	self deny: FBExclusiveGateway isAbstract
-]
-
-{ #category : 'tests' }
 FBGatewayTest >> testAddOutgoingNodeWithConditionAttachesAConditionedTransition [
 	| start gateway a b end flow instance |
 	start := FBStartEvent new.
@@ -33,4 +27,10 @@ FBGatewayTest >> testAddOutgoingNodeWithConditionAttachesAConditionedTransition 
 	self assert: instance atEnd.
 	self assert: (instance activations anySatisfy: [ :each | each node = a ]).
 	self deny: (instance activations anySatisfy: [ :each | each node = b ])
+]
+
+{ #category : 'tests' }
+FBGatewayTest >> testGatewayIsAbstractOnlyForTheBaseClass [
+	self assert: FBGateway isAbstract.
+	self deny: FBExclusiveGateway isAbstract
 ]

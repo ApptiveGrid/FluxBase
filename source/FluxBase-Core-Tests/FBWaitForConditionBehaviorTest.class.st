@@ -6,6 +6,18 @@ Class {
 }
 
 { #category : 'tests' }
+FBWaitForConditionBehaviorTest >> testConditionTrueFollowsOutgoing [
+	| flow instance |
+	flow := FBFlow simpleWaitFlow.
+	instance := flow newInstance.
+	instance executeWith: 5.
+
+	self assert: instance atEnd.
+	self assert: instance state equals: #done.
+	self assert: instance suspended isEmpty
+]
+
+{ #category : 'tests' }
 FBWaitForConditionBehaviorTest >> testSuspendedContainsTheWaitNodeNotTheBehavior [
 	| flow waitNode instance |
 	flow := FBFlow simpleWaitFlow.
@@ -18,16 +30,4 @@ FBWaitForConditionBehaviorTest >> testSuspendedContainsTheWaitNodeNotTheBehavior
 	self assert: instance suspended size equals: 1.
 	self assert: instance suspended first equals: waitNode.
 	self deny: (instance suspended first isKindOf: FBNodeBehavior)
-]
-
-{ #category : 'tests' }
-FBWaitForConditionBehaviorTest >> testConditionTrueFollowsOutgoing [
-	| flow instance |
-	flow := FBFlow simpleWaitFlow.
-	instance := flow newInstance.
-	instance executeWith: 5.
-
-	self assert: instance atEnd.
-	self assert: instance state equals: #done.
-	self assert: instance suspended isEmpty
 ]

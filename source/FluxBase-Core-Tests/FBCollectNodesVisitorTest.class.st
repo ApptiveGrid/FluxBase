@@ -6,18 +6,18 @@ Class {
 }
 
 { #category : 'tests' }
-FBCollectNodesVisitorTest >> testCollectsAllReachableNodesInASimpleFlow [
+FBCollectNodesVisitorTest >> testCollectsAllReachableNodesInABranchingFlow [
 	| flow visitor |
-	flow := FBFlow simpleFlow.
+	flow := FBFlow complex.
 	visitor := FBCollectNodesVisitor new.
 	visitor visit: flow.
 	self assert: visitor nodes asSet equals: flow nodes asSet
 ]
 
 { #category : 'tests' }
-FBCollectNodesVisitorTest >> testCollectsAllReachableNodesInABranchingFlow [
+FBCollectNodesVisitorTest >> testCollectsAllReachableNodesInASimpleFlow [
 	| flow visitor |
-	flow := FBFlow complex.
+	flow := FBFlow simpleFlow.
 	visitor := FBCollectNodesVisitor new.
 	visitor visit: flow.
 	self assert: visitor nodes asSet equals: flow nodes asSet
