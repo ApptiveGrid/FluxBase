@@ -256,6 +256,11 @@ FBFlow >> end [
 	^ start findEnd
 ]
 
+{ #category : 'accessing' }
+FBFlow >> endNodes [
+	^ self nodes select: [ :each | each isKindOf: FBEndEvent ]
+]
+
 { #category : 'initialization' }
 FBFlow >> initialize [ 
 	super initialize.
