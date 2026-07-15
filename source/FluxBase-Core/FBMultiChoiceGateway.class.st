@@ -1,6 +1,6 @@
 Class {
 	#name : 'FBMultiChoiceGateway',
-	#superclass : 'FBGateway',
+	#superclass : 'FBSplitGateway',
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
 	#tag : 'Model'
