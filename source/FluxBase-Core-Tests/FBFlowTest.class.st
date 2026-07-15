@@ -6,11 +6,41 @@ Class {
 }
 
 { #category : 'tests' }
-FBFlowTest >> testAllNodes [ 
+FBFlowTest >> testAllNodes [
 	| flow |
-	flow := FBFlow simpleFlow. 
+	flow := FBFlow simpleFlow.
 	self assert: flow nodes size equals: 3.
-	self assert: flow end class equals: FBEndEvent 
+	self assert: flow end class equals: FBEndEvent
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testEndNodesFindsSingleEnd [
+	| flow |
+	flow := FBFlow simpleFlow.
+	self assert: flow endNodes size equals: 1.
+	self assert: flow endNodes anyOne equals: flow end
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testEndNodesFindsAllEndsInABranchingFlow [
+	| start gateway a b successEnd failureEnd flow |
+	start := FBStartEvent new.
+	gateway := FBExclusiveGateway named: 'choice'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	successEnd := FBEndEvent new.
+	failureEnd := FBEndEvent new.
+
+	start --> gateway.
+	gateway --> (a when: [ :x | x > 0 ]) --> successEnd.
+	gateway --> (b when: [ :x | x <= 0 ]) --> failureEnd.
+
+	flow := FBFlow new start: start.
+
+	self assert: flow endNodes size equals: 2.
+	self assert: (flow endNodes includes: successEnd).
+	self assert: (flow endNodes includes: failureEnd).
+	self assert: (flow end isKindOf: FBEndEvent)
 ]
 
 { #category : 'tests' }
