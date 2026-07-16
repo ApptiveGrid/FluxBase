@@ -1,5 +1,5 @@
 Class {
-	#name : 'FBAndJoin',
+	#name : 'FBOrJoin',
 	#superclass : 'FBMergeGateway',
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -7,6 +7,6 @@ Class {
 }
 
 { #category : 'as yet unclassified' }
-FBAndJoin >> defaultBehaviorClass [
+FBOrJoin >> defaultBehaviorClass [
 	^ FBJoinBehavior
 ]

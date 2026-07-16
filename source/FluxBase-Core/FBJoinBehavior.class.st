@@ -1,5 +1,5 @@
 Class {
-	#name : 'FBAndJoinBehavior',
+	#name : 'FBJoinBehavior',
 	#superclass : 'FBNodeBehavior',
 	#category : 'FluxBase-Core-Behavior',
 	#package : 'FluxBase-Core',
@@ -7,7 +7,7 @@ Class {
 }
 
 { #category : 'as yet unclassified' }
-FBAndJoinBehavior >> execute [
+FBJoinBehavior >> execute [
 	| joinState token sourceActivation sourceNode |
 	activation value: self argument.
 	token := activation token.
