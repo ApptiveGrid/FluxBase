@@ -8,7 +8,14 @@ Class {
 
 { #category : 'execution' }
 FBAndSplitBehavior >> execute [
+	| splitId |
 	activation value: self argument.
 	activation done.
-	activation followAllOutgoing.
+	splitId := FBIdGenerator current newId.
+	activation node outgoing do: [ :transition |
+		activation followTransition: transition withToken: (
+			activation childToken
+				splitId: splitId;
+				branchId: FBIdGenerator current newId;
+				yourself) ]
 ]
