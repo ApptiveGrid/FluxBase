@@ -5,6 +5,22 @@ Class {
 	#package : 'FluxBase-Core-Tests'
 }
 
+{ #category : 'as yet unclassified' }
+FBActivationTest >> testChildTokenCarriesParentageAndScopeSplitBranchForward [
+	| activation child |
+	activation := FBActivation new.
+	activation token
+		scopeId: 'scope-1';
+		splitId: 'split-1';
+		branchId: 'branch-1'.
+	child := activation childToken.
+	self assert: child parentId equals: activation token id.
+	self assert: child scopeId equals: 'scope-1'.
+	self assert: child splitId equals: 'split-1'.
+	self assert: child branchId equals: 'branch-1'.
+	self deny: child id equals: activation token id
+]
+
 { #category : 'tests' }
 FBActivationTest >> testEnvironment [
 	| activation node |

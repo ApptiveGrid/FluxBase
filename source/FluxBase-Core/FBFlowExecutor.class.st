@@ -13,7 +13,12 @@ Class {
 
 { #category : 'as yet unclassified' }
 FBFlowExecutor >> addPending: aTransition [
-	pending add: (FBWorkItem new transition: aTransition; yourself)
+	^ self addPending: aTransition withToken: nil
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowExecutor >> addPending: aTransition withToken: aToken [
+	pending add: (FBWorkItem new transition: aTransition; token: aToken; yourself)
 ]
 
 { #category : 'accessing' }
@@ -61,6 +66,7 @@ FBFlowExecutor >> step [
 	lastValue := transition source lastValueIn: self.
 	flowInstance addEvent: (FBTransitionFollowed new transition: transition; value: lastValue).
 	activation := self newActivation: transition. 
+	workItem token ifNotNil: [ :t | activation token: t ].
 	activation argument: lastValue.
 	self activate: activation
 ]
