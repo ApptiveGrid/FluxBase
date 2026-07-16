@@ -52,7 +52,7 @@ FBFlowExecutorTest >> testFirstStepActivatesStartNodeUsingItselfAsPseudoTransiti
 	instance initializeExecutor.
 	instance step.
 	self assert: (instance activationOfNode: instance start) notNil.
-	self deny: instance pending first equals: instance start
+	self deny: instance pending first transition equals: instance start
 ]
 
 { #category : 'as yet unclassified' }
@@ -93,6 +93,24 @@ FBFlowExecutorTest >> testLastValueOfReturnsTheActivationsValue [
 ]
 
 { #category : 'as yet unclassified' }
+FBFlowExecutorTest >> testNextNodeStillWorksThroughTheWorkItemWrapper [
+	| instance task |
+	instance := FBFlow simpleFlow newInstance.
+	instance initializeExecutor.
+	instance step.
+	task := instance flow nodes second.
+	self assert: instance nextNode equals: task
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowExecutorTest >> testPendingItemsAreWorkItems [
+	| instance |
+	instance := FBFlow simpleFlow newInstance.
+	instance initializeExecutor.
+	self assert: (instance pending first isKindOf: FBWorkItem)
+]
+
+{ #category : 'as yet unclassified' }
 FBFlowExecutorTest >> testResumeWaitingRemovesNodeFromSuspendedAndReachesEnd [
 	| instance waitNode |
 	instance := FBFlow simpleWaitFlow newInstance.
@@ -118,7 +136,7 @@ FBFlowExecutorTest >> testScheduleStartAddsStartNodeAsPendingAndMarksCreated [
 	instance := FBFlow simpleFlow newInstance.
 	instance initializeExecutor.
 	self assert: instance pending size equals: 1.
-	self assert: instance pending first equals: instance start.
+	self assert: instance pending first transition equals: instance start.
 	self assert: instance executor isCreated
 ]
 
@@ -134,4 +152,27 @@ FBFlowExecutorTest >> testStepConsumesPendingOneAtATimeOnALinearFlow [
 	self assert: instance pending size equals: 1.
 	instance step.
 	self assert: instance pending isEmpty
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowExecutorTest >> testWorkItemDuckTypesSourceAndTargetForARealTransition [
+	| instance task workItem |
+	instance := FBFlow simpleFlow newInstance.
+	instance initializeExecutor.
+	instance step.
+	task := instance flow nodes second.
+	workItem := instance pending first.
+	self assert: (workItem isKindOf: FBWorkItem).
+	self assert: workItem source equals: instance start.
+	self assert: workItem target equals: task
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowExecutorTest >> testWorkItemDuckTypesSourceAndTargetForTheStartPseudoTransition [
+	| instance workItem |
+	instance := FBFlow simpleFlow newInstance.
+	instance initializeExecutor.
+	workItem := instance pending first.
+	self assert: workItem source equals: instance start.
+	self assert: workItem target equals: instance start
 ]

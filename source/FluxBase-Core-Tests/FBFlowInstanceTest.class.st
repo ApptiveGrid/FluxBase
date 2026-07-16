@@ -39,8 +39,8 @@ FBFlowInstanceTest >> testCreateFlowInstance [
 	flowInstance := FBFlow simpleFlow newInstance.
 	flowInstance initializeExecutor.
 	self assert: flowInstance pending size equals: 1.
-	self assert: flowInstance pending first class equals: FBStartEvent  
-
+	self assert: flowInstance pending first class equals: FBWorkItem.
+	self assert: flowInstance pending first transition class equals: FBStartEvent
 ]
 
 { #category : 'tests' }

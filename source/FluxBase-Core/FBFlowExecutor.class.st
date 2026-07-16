@@ -11,6 +11,11 @@ Class {
 	#tag : 'Model'
 }
 
+{ #category : 'as yet unclassified' }
+FBFlowExecutor >> addPending: aTransition [
+	pending add: (FBWorkItem new transition: aTransition; yourself)
+]
+
 { #category : 'accessing' }
 FBFlowExecutor >> atEnd [
 	^ self isDone 
@@ -49,9 +54,10 @@ FBFlowExecutor >> newActivation: transition [
 
 { #category : 'executing' }
 FBFlowExecutor >> step [
-	| transition activation lastValue |
-	flowInstance aboutToTransition: pending first.
-	transition := pending removeFirst. 
+	| workItem transition activation lastValue |
+	flowInstance aboutToTransition: pending first transition.
+	workItem := pending removeFirst.
+	transition := workItem transition.
 	lastValue := transition source lastValueIn: self.
 	flowInstance addEvent: (FBTransitionFollowed new transition: transition; value: lastValue).
 	activation := self newActivation: transition. 
