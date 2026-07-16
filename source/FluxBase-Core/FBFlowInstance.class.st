@@ -10,7 +10,8 @@ Class {
 		'events',
 		'activations',
 		'metadata',
-		'joinStates'
+		'joinStates',
+		'splitBranchCounts'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -143,6 +144,12 @@ FBFlowInstance >> executors [
 	^ executors
 ]
 
+{ #category : 'as yet unclassified' }
+FBFlowInstance >> expectedBranchCountFor: aSplitId [
+	splitBranchCounts ifNil: [ ^ nil ].
+	^ splitBranchCounts at: aSplitId ifAbsent: [ nil ]
+]
+
 { #category : 'accessing' }
 FBFlowInstance >> flow [
 	^ flow
@@ -201,15 +208,19 @@ FBFlowInstance >> isRootExecutor [
 
 { #category : 'as yet unclassified' }
 FBFlowInstance >> joinStateFor: aNode splitId: aSplitId [
+	| registeredCount |
 	joinStates ifNil: [ joinStates := Dictionary new ].
 	^ joinStates
 		at: { aNode. aSplitId }
 		ifAbsentPut: [ 
+			registeredCount := self expectedBranchCountFor: aSplitId.
 			FBJoinState new
 				joinNode: aNode;
 				splitId: aSplitId;
-				expected: aNode incoming asOrderedCollection;
-				policy: #all;
+				expected: (registeredCount
+					ifNil: [ aNode incoming asOrderedCollection ]
+					ifNotNil: [ Array new: registeredCount ]);
+				policy: (registeredCount ifNil: [ #all ] ifNotNil: [ #activeOnly ]);
 				yourself ]
 ]
 
@@ -294,6 +305,12 @@ FBFlowInstance >> pushExecutor: anExecutor [
 		flowInstance: self;
 		suspendedExecutor: executor;
 		yourself
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowInstance >> registerExpectedBranchCount: aCount forSplitId: aSplitId [
+	splitBranchCounts ifNil: [ splitBranchCounts := Dictionary new ].
+	splitBranchCounts at: aSplitId put: aCount
 ]
 
 { #category : 'executing' }
