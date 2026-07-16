@@ -39,7 +39,7 @@ FBJoinState >> expected: aCollection [
 FBJoinState >> initialize [
 	super initialize.
 	expected := OrderedCollection new.
-	arrived := OrderedCollection new.
+	arrived := Dictionary new.
 	released := false
 ]
 

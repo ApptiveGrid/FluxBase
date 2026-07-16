@@ -6,6 +6,28 @@ Class {
 }
 
 { #category : 'as yet unclassified' }
+FBAndJoinBehaviorTest >> testCompletingActivationValueIsADictionaryOfSourceNodeToValue [
+	| start split a b join end flow instance completingActivation joinValue |
+	start := FBStartEvent new.
+	split := FBAndSplit named: 'split'.
+	a := (FBPluggableTask named: 'a') block: [ :act | act value: act argument + 1 ].
+	b := (FBPluggableTask named: 'b') block: [ :act | act value: act argument * 10 ].
+	join := FBAndJoin named: 'join'.
+	end := FBEndEvent new.
+	start --> split.
+	split --> a --> join.
+	split --> b --> join.
+	join --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 5.
+	completingActivation := (instance activations select: [ :act | act node = join ]) last.
+	joinValue := completingActivation value.
+	self assert: (joinValue at: a) equals: 6.
+	self assert: (joinValue at: b) equals: 50
+]
+
+{ #category : 'as yet unclassified' }
 FBAndJoinBehaviorTest >> testDoesNotProceedUntilAllBranchesHaveArrived [
 	| start split a b join end flow instance |
 	start := FBStartEvent new.
@@ -28,8 +50,8 @@ FBAndJoinBehaviorTest >> testDoesNotProceedUntilAllBranchesHaveArrived [
 ]
 
 { #category : 'as yet unclassified' }
-FBAndJoinBehaviorTest >> testDuplicateArrivalOfTheSameBranchIdIsNotCountedTwice [
-	| start split a b join end flow instance duplicateActivation joinState splitIdUsed branchIdUsed |
+FBAndJoinBehaviorTest >> testDuplicateArrivalFromTheSameSourceNodeIsNotCountedTwice [
+	| start split a b join end flow instance realActivationForA duplicate1 duplicate2 joinState splitIdUsed |
 	start := FBStartEvent new.
 	split := FBAndSplit named: 'split'.
 	a := FBTask named: 'a'.
@@ -45,20 +67,18 @@ FBAndJoinBehaviorTest >> testDuplicateArrivalOfTheSameBranchIdIsNotCountedTwice 
 	instance initializeExecutor.
 	instance step. "start"
 	instance step. "split"
-	instance step. "a arrives at join"
-	splitIdUsed := (instance activationOfNode: a) token splitId.
-	branchIdUsed := (instance activationOfNode: a) token branchId.
-	self deny: (instance activations anySatisfy: [ :act | act node = end ]).
-	duplicateActivation := FBActivation new
-		executor: instance executor;
-		node: join;
-		argument: 99;
-		yourself.
-	duplicateActivation token splitId: splitIdUsed; branchId: branchIdUsed.
-	(join defaultBehaviorClass new activation: duplicateActivation; yourself) execute.
+	instance step. "a itself runs (not yet at join)"
+	realActivationForA := instance activationOfNode: a.
+	splitIdUsed := realActivationForA token splitId.
+	duplicate1 := FBActivation new executor: instance executor; node: join; argument: 10; yourself.
+	duplicate1 token splitId: splitIdUsed; branchId: realActivationForA token branchId; parentId: realActivationForA token id.
+	duplicate2 := FBActivation new executor: instance executor; node: join; argument: 20; yourself.
+	duplicate2 token splitId: splitIdUsed; branchId: realActivationForA token branchId; parentId: realActivationForA token id.
+	(join defaultBehaviorClass new activation: duplicate1; yourself) execute.
+	(join defaultBehaviorClass new activation: duplicate2; yourself) execute.
 	joinState := instance joinStateFor: join splitId: splitIdUsed.
 	self assert: joinState arrived size equals: 1.
-	self deny: (instance activations anySatisfy: [ :act | act node = end ])
+	self assert: (joinState arrived at: a) equals: 20 "second delivery overwrites, still one entry"
 ]
 
 { #category : 'as yet unclassified' }
