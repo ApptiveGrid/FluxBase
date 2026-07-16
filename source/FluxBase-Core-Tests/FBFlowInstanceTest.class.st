@@ -146,6 +146,45 @@ FBFlowInstanceTest >> testListNodeEvents [
 	self assert: events size equals: 2
 ]
 
+{ #category : 'as yet unclassified' }
+FBFlowInstanceTest >> testNodeActivationEventScopeIdAndSplitIdAreNilBeforePhase3Wiring [
+	| flowInstance node event |
+	flowInstance := FBFlow simpleFlow newInstance.
+	flowInstance initialValue: 7.
+	flowInstance execute.
+	node := flowInstance flow nodes second.
+	event := (flowInstance eventsOfNode: node) detect: [ :e | e isKindOf: FBNodeActivationDone ].
+	self assert: event scopeId isNil.
+	self assert: event splitId isNil
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowInstanceTest >> testNodeActivationEventsExposeTokenId [
+	| flowInstance node events startedEvent doneEvent |
+	flowInstance := FBFlow simpleFlow newInstance.
+	flowInstance initialValue: 7.
+	flowInstance execute.
+	node := flowInstance flow nodes second.
+	events := flowInstance eventsOfNode: node.
+	startedEvent := events detect: [ :e | e isKindOf: FBNodeActivationStarted ].
+	doneEvent := events detect: [ :e | e isKindOf: FBNodeActivationDone ].
+	self assert: startedEvent tokenId notNil.
+	self assert: startedEvent tokenId equals: doneEvent tokenId
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowInstanceTest >> testNodeActivationEventsForDifferentNodesHaveDifferentTokenIds [
+	| flowInstance firstNode secondNode firstEvent secondEvent |
+	flowInstance := FBFlow simpleFlow newInstance.
+	flowInstance initialValue: 7.
+	flowInstance execute.
+	firstNode := flowInstance flow start.
+	secondNode := flowInstance flow nodes second.
+	firstEvent := (flowInstance eventsOfNode: firstNode) detect: [ :e | e isKindOf: FBNodeActivationDone ].
+	secondEvent := (flowInstance eventsOfNode: secondNode) detect: [ :e | e isKindOf: FBNodeActivationDone ].
+	self deny: firstEvent tokenId equals: secondEvent tokenId
+]
+
 { #category : 'tests' }
 FBFlowInstanceTest >> testResumeWaitingAtContinuesTheFlow [
 	| flow instance waitNode |
