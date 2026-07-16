@@ -86,8 +86,13 @@ FBBaseActivation >> followAllOutgoing [
 
 { #category : 'as yet unclassified' }
 FBBaseActivation >> followTransition: aTransition [
+	self followTransition: aTransition withToken: self childToken
+]
+
+{ #category : 'as yet unclassified' }
+FBBaseActivation >> followTransition: aTransition withToken: aToken [
 	(aTransition conditionMatches: self value) ifTrue: [ 
-		executor flowInstance executor addPending: aTransition withToken: self childToken ]
+		executor flowInstance executor addPending: aTransition withToken: aToken ]
 ]
 
 { #category : 'testing' }
