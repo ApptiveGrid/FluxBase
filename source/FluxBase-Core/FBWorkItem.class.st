@@ -12,6 +12,16 @@ Class {
 }
 
 { #category : 'as yet unclassified' }
+FBWorkItem >> source [
+	^ transition source
+]
+
+{ #category : 'as yet unclassified' }
+FBWorkItem >> target [
+	^ transition target
+]
+
+{ #category : 'as yet unclassified' }
 FBWorkItem >> token [
 	^ token
 ]

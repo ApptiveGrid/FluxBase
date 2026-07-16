@@ -95,8 +95,8 @@ FBBaseExecutor >> initialize [
 ]
 
 { #category : 'testing' }
-FBBaseExecutor >> isCreated [ 
-	^ (pending size = 1) and: [ pending first = flowInstance start ]
+FBBaseExecutor >> isCreated [
+	^ (pending size = 1) and: [ pending first transition = flowInstance start ]
 ]
 
 { #category : 'accessing' }
@@ -145,7 +145,7 @@ FBBaseExecutor >> rootExecutor [
 
 { #category : 'as yet unclassified' }
 FBBaseExecutor >> scheduleStart [
-	pending add: flowInstance start.
+	pending add: (FBWorkItem new transition: flowInstance start; yourself).
 	flowInstance addEvent: FBFlowInstanceStarted new
 ]
 
