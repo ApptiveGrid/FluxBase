@@ -21,3 +21,23 @@ FBActivationTest >> testEnvironmentSchema [
 	activation := FBActivation new node: node.
 	self assert: (activation metadataSchema at: #status) class equals: FBPropertyStringType 
 ]
+
+{ #category : 'as yet unclassified' }
+FBActivationTest >> testNewActivationHasAStableToken [
+	| activation |
+	activation := FBActivation new.
+	self assert: activation token notNil.
+	self assert: activation token id equals: activation token id
+]
+
+{ #category : 'as yet unclassified' }
+FBActivationTest >> testTokenGetterDoesNotPersistDefaultForActivationsWithoutAStoredToken [
+	| activation firstRead secondRead |
+	activation := FBActivation new.
+	activation token: nil.
+	firstRead := activation token.
+	secondRead := activation token.
+	self assert: firstRead notNil.
+	self assert: secondRead notNil.
+	self deny: firstRead id equals: secondRead id
+]

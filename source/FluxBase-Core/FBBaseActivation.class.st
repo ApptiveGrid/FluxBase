@@ -6,11 +6,11 @@ Class {
 		'node',
 		'state',
 		'id',
-		'timestamp'
+		'timestamp',
+		'token'
 	],
-	#category : 'FluxBase-Core-Model',
-	#package : 'FluxBase-Core',
-	#tag : 'Model'
+	#category : 'FluxBase-Core',
+	#package : 'FluxBase-Core'
 }
 
 { #category : 'activation' }
@@ -92,11 +92,12 @@ FBBaseActivation >> id [
 ]
 
 { #category : 'initialization' }
-FBBaseActivation >> initialize [ 
+FBBaseActivation >> initialize [
 	super initialize.
 	id := FBIdGenerator current newId.
 	timestamp := DateAndTime now.
-	state := #created
+	state := #created.
+	token := FBToken new
 ]
 
 { #category : 'accessing' }
@@ -133,6 +134,19 @@ FBBaseActivation >> shouldFollowTransition: aTransition with: value [
 { #category : 'accessing' }
 FBBaseActivation >> state [
 	^ state
+]
+
+{ #category : 'as yet unclassified' }
+FBBaseActivation >> token [
+	"Content-sicherer Getter: bereits persistierte, alte Activations aus der Zeit vor der token-Ivar haben token = nil.
+	Fuer diese wird bei jedem Lesen ein frischer Default zurueckgegeben, OHNE ihn in die Ivar zurueckzuschreiben -
+	sonst wuerde ein reiner Lesezugriff die Activation als geaendert markieren (Modification on Read, siehe FBFlowInstance>>metadata)."
+	^ token ifNil: [ FBToken new ]
+]
+
+{ #category : 'as yet unclassified' }
+FBBaseActivation >> token: aFBToken [
+	token := aFBToken
 ]
 
 { #category : 'as yet unclassified' }
