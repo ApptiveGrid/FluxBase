@@ -26,3 +26,18 @@ FBNodeActivationEvent >> printOn: aStream [
 	super printOn: aStream.
 	activation node printOn: aStream.
 ]
+
+{ #category : 'as yet unclassified' }
+FBNodeActivationEvent >> scopeId [
+	^ activation token scopeId
+]
+
+{ #category : 'as yet unclassified' }
+FBNodeActivationEvent >> splitId [
+	^ activation token splitId
+]
+
+{ #category : 'as yet unclassified' }
+FBNodeActivationEvent >> tokenId [
+	^ activation token id
+]
