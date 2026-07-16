@@ -27,6 +27,16 @@ FBBaseActivation >> addEvent: aFBFlowEvent [
 ]
 
 { #category : 'as yet unclassified' }
+FBBaseActivation >> childToken [
+	^ FBToken new
+		parentId: self token id;
+		scopeId: self token scopeId;
+		splitId: self token splitId;
+		branchId: self token branchId;
+		yourself
+]
+
+{ #category : 'as yet unclassified' }
 FBBaseActivation >> done [
 	state := #done
 ]
@@ -77,7 +87,7 @@ FBBaseActivation >> followAllOutgoing [
 { #category : 'as yet unclassified' }
 FBBaseActivation >> followTransition: aTransition [
 	(aTransition conditionMatches: self value) ifTrue: [ 
-		executor flowInstance executor addPending: aTransition ]
+		executor flowInstance executor addPending: aTransition withToken: self childToken ]
 ]
 
 { #category : 'testing' }

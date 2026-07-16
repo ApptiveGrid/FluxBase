@@ -56,6 +56,17 @@ FBFlowExecutorTest >> testFirstStepActivatesStartNodeUsingItselfAsPseudoTransiti
 ]
 
 { #category : 'as yet unclassified' }
+FBFlowExecutorTest >> testFollowTransitionPropagatesTokenParentageAcrossASingleStep [
+	| instance startToken taskToken task |
+	instance := FBFlow simpleFlow newInstance.
+	instance executeWith: 7.
+	task := instance flow nodes second.
+	startToken := (instance activationOfNode: instance start) token.
+	taskToken := (instance activationOfNode: task) token.
+	self assert: taskToken parentId equals: startToken id
+]
+
+{ #category : 'as yet unclassified' }
 FBFlowExecutorTest >> testHasPendingReflectsPendingState [
 	| instance |
 	instance := FBFlow simpleFlow newInstance.
@@ -141,6 +152,14 @@ FBFlowExecutorTest >> testScheduleStartAddsStartNodeAsPendingAndMarksCreated [
 ]
 
 { #category : 'as yet unclassified' }
+FBFlowExecutorTest >> testStartActivationTokenHasNoParent [
+	| instance |
+	instance := FBFlow simpleFlow newInstance.
+	instance executeWith: 7.
+	self assert: (instance activationOfNode: instance start) token parentId isNil
+]
+
+{ #category : 'as yet unclassified' }
 FBFlowExecutorTest >> testStepConsumesPendingOneAtATimeOnALinearFlow [
 	| instance |
 	instance := FBFlow simpleFlow newInstance.
@@ -152,6 +171,20 @@ FBFlowExecutorTest >> testStepConsumesPendingOneAtATimeOnALinearFlow [
 	self assert: instance pending size equals: 1.
 	instance step.
 	self assert: instance pending isEmpty
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowExecutorTest >> testTokenLineagePropagatesAcrossMultipleSequentialSteps [
+	| instance task startToken taskToken endToken |
+	instance := FBFlow simpleFlow newInstance.
+	instance executeWith: 7.
+	task := instance flow nodes second.
+	startToken := (instance activationOfNode: instance start) token.
+	taskToken := (instance activationOfNode: task) token.
+	endToken := (instance activationOfNode: instance flow end) token.
+	self assert: taskToken parentId equals: startToken id.
+	self assert: endToken parentId equals: taskToken id.
+	self assert: ({ startToken id. taskToken id. endToken id } asSet size) equals: 3
 ]
 
 { #category : 'as yet unclassified' }

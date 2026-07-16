@@ -46,8 +46,13 @@ FBBaseExecutor >> addEvent: anEvent [
 ]
 
 { #category : 'adding' }
-FBBaseExecutor >> addPending: aFBNode [ 
-	pending add: aFBNode 
+FBBaseExecutor >> addPending: aTransition [
+	^ self addPending: aTransition withToken: nil
+]
+
+{ #category : 'as yet unclassified' }
+FBBaseExecutor >> addPending: aTransition withToken: aToken [
+	pending add: aTransition
 ]
 
 { #category : 'accessing' }
