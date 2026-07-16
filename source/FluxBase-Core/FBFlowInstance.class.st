@@ -9,7 +9,8 @@ Class {
 		'announcer',
 		'events',
 		'activations',
-		'metadata'
+		'metadata',
+		'joinStates'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -196,6 +197,20 @@ FBFlowInstance >> isDone [
 FBFlowInstance >> isRootExecutor [
 
 	^ self rootExecutor = self executor
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowInstance >> joinStateFor: aNode splitId: aSplitId [
+	joinStates ifNil: [ joinStates := Dictionary new ].
+	^ joinStates
+		at: { aNode. aSplitId }
+		ifAbsentPut: [ 
+			FBJoinState new
+				joinNode: aNode;
+				splitId: aSplitId;
+				expected: aNode incoming asOrderedCollection;
+				policy: #all;
+				yourself ]
 ]
 
 { #category : 'accessing' }
