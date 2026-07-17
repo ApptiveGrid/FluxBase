@@ -9,6 +9,12 @@ Class {
 	#tag : 'Model'
 }
 
+{ #category : 'testing' }
+FBPluggableTask class >> isAbstract [
+
+	^ true
+]
+
 { #category : 'instance creation' }
 FBPluggableTask >> activateWith: anActivation [
 

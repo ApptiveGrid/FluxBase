@@ -6,6 +6,12 @@ Class {
 	#tag : 'Model'
 }
 
+{ #category : 'testing' }
+FBParallelJoinNode class >> isAbstract [
+
+	^ true
+]
+
 { #category : 'as yet unclassified' }
 FBParallelJoinNode >> defaultBehaviorClass [
 	^ FBParallelJoinNodeBehavior

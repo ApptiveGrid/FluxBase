@@ -6,6 +6,12 @@ Class {
 	#tag : 'Model'
 }
 
+{ #category : 'testing' }
+FBTask class >> isAbstract [
+
+	^ self == FBTask
+]
+
 { #category : 'accessing' }
 FBTask >> defaultBehaviorClass [
 	^ FBTaskBehavior
