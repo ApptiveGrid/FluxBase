@@ -27,3 +27,14 @@ FBMergeGatewayTest >> testMergeGatewayIsAbstractOnlyForTheBaseClass [
 FBMergeGatewayTest >> testSimpleMergeIsAKindOfMergeGateway [
 	self assert: (FBSimpleMerge inheritsFrom: FBMergeGateway)
 ]
+
+{ #category : 'tests' }
+FBMergeGatewayTest >> testAllExposedNodeClassesHaveATypeName [
+	"FBNode class>>exposedNodes (and FBNode class>>withType:) call #typeName
+	on every exposed node class. FBAndJoin/FBOrJoin used to lack an
+	override and would blow up with a doesNotUnderstand as soon as any
+	code (e.g. AGFlowHolder sample flows, REST node-type listing) iterated
+	over the full exposed set."
+
+	self shouldnt: [ FBNode exposedNodes ] raise: MessageNotUnderstood
+]

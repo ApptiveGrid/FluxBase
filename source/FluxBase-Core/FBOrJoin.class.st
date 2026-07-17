@@ -6,6 +6,12 @@ Class {
 	#tag : 'Model'
 }
 
+{ #category : 'instance creation' }
+FBOrJoin class >> typeName [
+
+	^ #orJoin
+]
+
 { #category : 'as yet unclassified' }
 FBOrJoin >> defaultBehaviorClass [
 	^ FBJoinBehavior
