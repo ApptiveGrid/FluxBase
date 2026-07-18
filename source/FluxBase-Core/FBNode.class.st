@@ -18,7 +18,7 @@ Class {
 { #category : 'testing' }
 FBNode class >> isAbstract [
 
-	^ true
+	^ self == FBNode
 ]
 
 { #category : 'instance creation' }
