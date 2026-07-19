@@ -133,9 +133,34 @@ FBNode >> collectionNeighborsIn: aCollection [
 
 ]
 
+{ #category : 'converting' }
+FBNode >> convertTo: aClass [
+	"Answer a new instance of aClass carrying over this node's identity and
+	connections: id, name, properties, behaviorClass override (only if it was
+	actually set on the receiver), flow, and incoming/outgoing transitions
+	(repointed to the new node). The receiver ends up fully detached from the
+	flow graph -- it is not itself removed from anywhere, it simply becomes
+	unreferenced once nothing else points at it.
+
+	Used to migrate a persisted node to a different, structurally compatible
+	node class -- see FBFlow>>convertNode:toClass:."
+	| newNode |
+	newNode := aClass new.
+	newNode setId: id.
+	newNode name: name.
+	newNode properties: properties.
+	behaviorClass ifNotNil: [ newNode behaviorClass: behaviorClass ].
+	newNode setFlow: flow.
+	newNode setIncoming: incoming copy.
+	newNode setOutgoing: outgoing copy.
+	incoming do: [ :each | each target: newNode ].
+	outgoing do: [ :each | each source: newNode ].
+	^ newNode
+]
+
 { #category : 'accessing' }
 FBNode >> defaultBehaviorClass [
-	self subclassResponsibility 
+	self subclassResponsibility
 ]
 
 { #category : 'as yet unclassified' }
@@ -329,8 +354,27 @@ FBNode >> removeOutgoing: aFBTransition [
 ]
 
 { #category : 'initialization' }
-FBNode >> setFlow: aFlow [ 
+FBNode >> setFlow: aFlow [
 	flow := aFlow
+]
+
+{ #category : 'initialization' }
+FBNode >> setId: anId [
+	"Low-level identity setter, used only by #convertTo: when migrating a
+	persisted node to a different node class while preserving its id."
+	id := anId
+]
+
+{ #category : 'initialization' }
+FBNode >> setIncoming: aCollection [
+	"Low-level setter, used only by #convertTo:."
+	incoming := aCollection
+]
+
+{ #category : 'initialization' }
+FBNode >> setOutgoing: aCollection [
+	"Low-level setter, used only by #convertTo:."
+	outgoing := aCollection
 ]
 
 { #category : 'connecting' }

@@ -14,7 +14,77 @@ FBFlowTest >> testAllNodes [
 ]
 
 { #category : 'tests' }
-FBFlowTest >> testCreateFlow [ 
+FBFlowTest >> testConvertNodeToClassPreservesBehaviorClassOverrideOnlyWhenSet [
+	| flow start gateway a b end newGateway |
+	flow := FBFlow new.
+	start := FBStartEvent new.
+	gateway := FBExclusiveGateway named: 'g'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	end := FBEndEvent new.
+	flow start: start.
+	start --> gateway.
+	gateway --> (a when: [ :x | x >= 5 ]) --> end.
+	gateway --> (b when: [ :x | x < 5 ]) --> end.
+
+	newGateway := flow convertNode: gateway toClass: FBMultiChoiceGateway.
+	self assert: (newGateway instVarNamed: #behaviorClass) isNil.
+	self assert: newGateway behaviorClass equals: FBMultiChoiceGatewayBehavior
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testConvertNodeToClassPreservesIdentityAndConnections [
+	| flow start gateway a b end newGateway incomingTransition outgoingA outgoingB oldId |
+	flow := FBFlow new.
+	start := FBStartEvent new.
+	gateway := FBExclusiveGateway named: 'choice'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	end := FBEndEvent new.
+	flow start: start.
+	start --> gateway.
+	gateway --> (a when: [ :x | x >= 5 ]) --> end.
+	gateway --> (b when: [ :x | x < 5 ]) --> end.
+	gateway propertyAt: #note put: 'a gateway'.
+	oldId := gateway id.
+	incomingTransition := start outgoing first.
+	outgoingA := gateway outgoing first.
+	outgoingB := gateway outgoing second.
+
+	newGateway := flow convertNode: gateway toClass: FBMultiChoiceGateway.
+
+	self assert: newGateway class equals: FBMultiChoiceGateway.
+	self deny: newGateway == gateway.
+	self assert: newGateway id equals: oldId.
+	self assert: newGateway name equals: 'choice'.
+	self assert: (newGateway propertyAt: #note) equals: 'a gateway'.
+
+	self assert: (flow nodes includes: newGateway).
+	self deny: (flow nodes includes: gateway).
+	self assert: (flow nodeWithId: oldId) equals: newGateway.
+
+	self assert: incomingTransition target equals: newGateway.
+	self assert: outgoingA source equals: newGateway.
+	self assert: outgoingB source equals: newGateway.
+	self assert: newGateway incoming size equals: 1.
+	self assert: newGateway outgoing size equals: 2
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testConvertNodeToClassSignalsWhenNodeNotManagedByFlow [
+	| otherFlow node |
+	otherFlow := FBFlow new.
+	otherFlow start: FBStartEvent new.
+	node := FBTask named: 'orphan'.
+	otherFlow start --> node.
+
+	self
+		should: [ FBFlow new convertNode: node toClass: FBTask ]
+		raise: FBNodeNotFound
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testCreateFlow [
 	| start end intermediate flow |
 	start := FBStartEvent new.
 	intermediate := start addOutgoingNode: FBNode new.
