@@ -5,8 +5,14 @@ Class {
 	#package : 'FluxBase-Core-Tests'
 }
 
+{ #category : 'testing' }
+FBTestTaskWithBehavior class >> isAbstract [
+
+	^ true
+]
+
 { #category : 'accessing' }
-FBTestTaskWithBehavior >> defaultBehaviorClass [ 
+FBTestTaskWithBehavior >> defaultBehaviorClass [
 	^ FBTestTaskBehavior 
 ]
 

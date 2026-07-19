@@ -9,6 +9,12 @@ Class {
 	#tag : 'Model'
 }
 
+{ #category : 'testing' }
+FBWaitForCondition class >> isAbstract [
+
+	^ true
+]
+
 { #category : 'accessing' }
 FBWaitForCondition >> condition: aBlock [
 	condition := aBlock 

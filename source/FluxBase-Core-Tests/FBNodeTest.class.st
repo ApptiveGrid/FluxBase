@@ -38,3 +38,19 @@ FBNodeTest >> testNodeSetProperty [
 	node propertyAt: #name put: 'Hello World'.
 	self assert: (node propertyAt: #name) equals: 'Hello World'
 ]
+
+{ #category : 'tests' }
+FBNodeTest >> testTaskIsAbstractOnlyForTheBaseClass [
+	self assert: FBTask isAbstract.
+	self deny: AGSendEmailTask isAbstract.
+	self assert: FBParallelNode isAbstract.
+	self assert: FBParallelJoinNode isAbstract.
+	self assert: FBPluggableTask isAbstract
+]
+
+{ #category : 'tests' }
+FBNodeTest >> testWaitIsAbstractOnlyForTheBaseClass [
+	self assert: FBWait isAbstract.
+	self assert: FBWaitForCondition isAbstract.
+	self assert: FBPluggableWait isAbstract
+]

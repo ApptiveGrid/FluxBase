@@ -6,8 +6,14 @@ Class {
 	#tag : 'Model'
 }
 
+{ #category : 'testing' }
+FBParallelNode class >> isAbstract [
+
+	^ true
+]
+
 { #category : 'accessing' }
-FBParallelNode >> activationClass [ 
+FBParallelNode >> activationClass [
 	^ FBParallelActivation  
 ]
 

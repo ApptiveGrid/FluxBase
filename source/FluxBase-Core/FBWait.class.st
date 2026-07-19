@@ -5,3 +5,9 @@ Class {
 	#package : 'FluxBase-Core',
 	#tag : 'Model'
 }
+
+{ #category : 'testing' }
+FBWait class >> isAbstract [
+
+	^ self == FBWait
+]

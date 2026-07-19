@@ -5,6 +5,12 @@ Class {
 	#package : 'FluxBase-Core-Tests'
 }
 
+{ #category : 'testing' }
+FBErrorTestTask class >> isAbstract [
+
+	^ true
+]
+
 { #category : 'accessing' }
 FBErrorTestTask >> value [
 	^ [ 1/0 ]
