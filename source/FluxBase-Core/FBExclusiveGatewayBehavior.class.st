@@ -12,7 +12,7 @@ FBExclusiveGatewayBehavior >> execute [
 	activation value: self argument.
 	activation done.
 	matching := self outgoing select: [ :each |
-		each hasCondition and: [ each conditionMatches: activation value ] ].
+		each hasCondition and: [ activation transitionMatches: each ] ].
 	matching size = 1 ifTrue: [ ^ self followTransition: matching first ].
 	matching size > 1 ifTrue: [
 		^ FBAmbiguousTransition signal: 'more than one outgoing transition matched on an exclusive gateway' ].

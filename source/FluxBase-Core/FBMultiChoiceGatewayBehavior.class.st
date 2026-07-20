@@ -12,7 +12,7 @@ FBMultiChoiceGatewayBehavior >> execute [
 	activation value: self argument.
 	activation done.
 	splitId := FBIdGenerator current newId.
-	matchingTransitions := activation node outgoing select: [ :t | t conditionMatches: self argument ].
+	matchingTransitions := activation node outgoing select: [ :t | activation transitionMatches: t ].
 	activation instance registerExpectedBranchCount: matchingTransitions size forSplitId: splitId.
 	matchingTransitions do: [ :transition |
 		activation followTransition: transition withToken: (
