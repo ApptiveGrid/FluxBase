@@ -146,15 +146,6 @@ FBBaseActivation >> shouldFollowTransition: aTransition with: value [
 	^ (aTransition conditionMatches: value)
 ]
 
-{ #category : 'as yet unclassified' }
-FBBaseActivation >> transitionMatches: aTransition [
-	"Hook subclasses can override to establish whatever evaluation context a
-	transition's condition needs (e.g. AGFlowActivation wraps this in the
-	transition's own ApptiveScript scope so conditions like 'source.input'
-	can resolve). The plain FluxBase-Core default has no such context."
-	^ aTransition conditionMatches: self value
-]
-
 { #category : 'accessing' }
 FBBaseActivation >> state [
 	^ state
@@ -171,6 +162,15 @@ FBBaseActivation >> token [
 { #category : 'as yet unclassified' }
 FBBaseActivation >> token: aFBToken [
 	token := aFBToken
+]
+
+{ #category : 'as yet unclassified' }
+FBBaseActivation >> transitionMatches: aTransition [
+	"Hook subclasses can override to establish whatever evaluation context a
+	transition's condition needs (e.g. AGFlowActivation wraps this in the
+	transition's own ApptiveScript scope so conditions like 'source.input'
+	can resolve). The plain FluxBase-Core default has no such context."
+	^ aTransition conditionMatches: self value
 ]
 
 { #category : 'as yet unclassified' }

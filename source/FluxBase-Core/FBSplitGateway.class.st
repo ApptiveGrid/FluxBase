@@ -14,6 +14,8 @@ FBSplitGateway class >> isAbstract [
 
 { #category : 'as yet unclassified' }
 FBSplitGateway >> addIncoming: aTransition [
+	(incoming includes: aTransition) ifTrue: [ ^ self ]. 
+
 	incoming isEmpty
 		ifFalse: [ FBCannotAddTransition signal: 'a split gateway can only have 1 incoming transition' ].
 	super addIncoming: aTransition
