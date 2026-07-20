@@ -42,7 +42,7 @@ FBNodeTest >> testNodeSetProperty [
 { #category : 'tests' }
 FBNodeTest >> testTaskIsAbstractOnlyForTheBaseClass [
 	self assert: FBTask isAbstract.
-	self deny: AGSendEmailTask isAbstract.
+	self deny: FBConcreteTestTask isAbstract.
 	self assert: FBParallelNode isAbstract.
 	self assert: FBParallelJoinNode isAbstract.
 	self assert: FBPluggableTask isAbstract
