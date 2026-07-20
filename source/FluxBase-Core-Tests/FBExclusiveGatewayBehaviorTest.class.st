@@ -6,6 +6,35 @@ Class {
 }
 
 { #category : 'tests' }
+FBExclusiveGatewayBehaviorTest >> testConditionEvaluationGoesThroughActivationHook [
+	"Characterization test: the gateway must ask the ACTIVATION whether a
+	transition matches (#transitionMatches:), not evaluate the condition
+	itself -- this is the hook AGFlowActivation (ApptiveBase-Core) overrides
+	to set up the ApptiveScript scope a condition like 'source.input'
+	needs. Regression test for a bug where FBExclusiveGatewayBehavior/
+	FBMultiChoiceGatewayBehavior called #conditionMatches: directly,
+	silently bypassing that hook."
+	| start gateway a b end flow instance |
+	FBRecordingTransitionActivation reset.
+	FBFlow activationClass: FBRecordingTransitionActivation.
+	[ start := FBStartEvent new.
+	gateway := FBExclusiveGateway named: 'choice'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	end := FBEndEvent new.
+	start --> gateway.
+	gateway --> (a when: [ :x | x >= 5 ]) --> end.
+	gateway --> (b when: [ :x | x < 5 ]) --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 7.
+	self assert: instance atEnd.
+	self assert: (FBRecordingTransitionActivation recorded includes: (gateway outgoing detect: [ :t | t target = a ])).
+	self assert: (FBRecordingTransitionActivation recorded includes: (gateway outgoing detect: [ :t | t target = b ])) ]
+		ensure: [ FBFlow activationClass: FBActivation ]
+]
+
+{ #category : 'tests' }
 FBExclusiveGatewayBehaviorTest >> testExactlyOneMatchFollowsThatTransition [
 	| start gateway a b end flow instance |
 	start := FBStartEvent new.
