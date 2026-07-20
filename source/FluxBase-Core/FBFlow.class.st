@@ -250,6 +250,22 @@ FBFlow >> basicRemoveNode: aNode [
 	nodesMap removeKey: aNode id
 ]
 
+{ #category : 'converting' }
+FBFlow >> convertNode: aNode toClass: aClass [
+	"Replace aNode -- one of my nodes -- with a new instance of aClass that
+	preserves its id, name, properties, behaviorClass override, and
+	connections (see FBNode>>convertTo:). Answers the new node. aNode ends
+	up fully detached and unreferenced; there is nothing further to clean up
+	on it."
+	| newNode |
+	(nodesMap at: aNode id ifAbsent: [ nil ]) == aNode
+		ifFalse: [ FBNodeNotFound signal: 'node is not managed by this flow' ].
+	newNode := aNode convertTo: aClass.
+	nodesMap at: newNode id put: newNode.
+	start == aNode ifTrue: [ start := newNode ].
+	^ newNode
+]
+
 { #category : 'accessing' }
 FBFlow >> end [
 	start ifNil: [ Error signal: 'Cannot find end without a start node being present' ].
