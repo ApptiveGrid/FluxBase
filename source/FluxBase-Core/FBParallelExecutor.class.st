@@ -91,8 +91,22 @@ FBParallelExecutor >> isParallel [
 
 { #category : 'accessing' }
 FBParallelExecutor >> lastValueOf: aFBNode [
-    aFBNode == node ifTrue: [ ^ list ].
-    ^ super lastValueOf: aFBNode
+	"resolve aFBNode's value for the iteration this executor is currently on.
+	when aFBNode's activation was created by this same executor (e.g. a task
+	directly inside this parallel scope), its values are one slot per iteration
+	of *this* list, so the current slot needs to be picked out explicitly.
+	when aFBNode is a join terminating a *nested* parallel scope though, its
+	activation was created by that (smaller/differently-sized) inner executor,
+	and its value is already the fully resolved result for this iteration - so
+	it must be used as-is rather than sliced again with this executor's index
+	(see FBParallelJoinNodeBehavior, and the FluxBase 'nested parallel node'
+	ticket this fixes)"
+	| activation |
+	aFBNode == node ifTrue: [ ^ list at: index ].
+	activation := self activationOf: aFBNode.
+	^ (activation executor == self)
+		ifTrue: [ activation value at: index ]
+		ifFalse: [ activation value ]
 ]
 
 { #category : 'accessing' }
@@ -152,10 +166,9 @@ FBParallelExecutor >> shouldFollowTransition: transition with: value [
 
 { #category : 'services' }
 FBParallelExecutor >> step [
-	| transition lastValue values |
+	| transition lastValue |
 	transition := pending removeFirst.
-	values := transition source lastValueIn: self.
-	lastValue := values at: index.
+	lastValue := transition source lastValueIn: self.
 
 	(self shouldFollowTransition: transition with: lastValue) ifTrue: [
 		self activateTransition: transition with: lastValue ].

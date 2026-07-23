@@ -156,9 +156,22 @@ FBBaseExecutor >> scheduleStart [
 
 { #category : 'accessing' }
 FBBaseExecutor >> stop [
+	self popThenResume: [ ]
+]
+
+{ #category : 'accessing' }
+FBBaseExecutor >> popThenResume: aBlock [
+	"pop this executor off the flow instance's executor stack, run aBlock while the
+	parent executor is already current, and only then notify the parent to resume.
+	callers that need to enqueue a continuation transition as part of popping (e.g.
+	FBParallelJoinNodeBehavior) must do so from aBlock: if it happened after the
+	parent's resumeAfter: instead, a parent parallel executor would already have
+	eagerly advanced to its next iteration (see FBParallelExecutor>>continue), and
+	the continuation would race against - and lose to - that next iteration"
 	| parent |
 	parent := suspendedExecutor.
 	flowInstance popExecutor: parent.
+	aBlock value.
 	parent ifNotNil: [
 		parent resumeAfter: self ]
 ]
