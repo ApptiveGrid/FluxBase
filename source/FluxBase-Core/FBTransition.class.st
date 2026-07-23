@@ -105,6 +105,15 @@ FBTransition >> target [
 ]
 
 { #category : 'accessing' }
-FBTransition >> target: aFBNode [ 
+FBTransition >> target: aFBNode [
 	target := aFBNode
+]
+
+{ #category : 'accessing' }
+FBTransition >> transition [
+	"duck-types as an FBWorkItem so callers of pending/isCreated don't need to
+	care whether an executor wraps its pending transitions or not (FBParallelExecutor
+	and any FBFlowExecutor pending queue persisted before FBWorkItem was introduced
+	both still hold raw transitions)"
+	^ self
 ]
