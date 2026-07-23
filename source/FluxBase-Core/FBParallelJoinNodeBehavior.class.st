@@ -11,7 +11,7 @@ FBParallelJoinNodeBehavior >> execute [
 	| executor |
 	executor := activation flowInstance executor.
 	executor atEnd ifTrue: [
-		executor stop .
-		activation values: activation arguments.
-		activation followAllOutgoing ]
+		executor popThenResume: [
+			activation values: activation arguments.
+			activation followAllOutgoing ] ]
 ]

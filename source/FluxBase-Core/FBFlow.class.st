@@ -92,6 +92,26 @@ FBFlow class >> parallelFlowJoined [
 ]
 
 { #category : 'tests' }
+FBFlow class >> nestedParallelFlowJoined [
+	"a parallel node whose own branch contains another, nested parallel node
+	(split into its own join before rejoining the outer split's join). Used to
+	characterize/regression-test the 'parallel node in parallel node' bug:
+	each outer iteration must see its own, correctly-scoped inner join result
+	instead of leaking/crashing against a sibling iteration's state"
+	<sampleInstance>
+	| start end outerFork innerFork task innerJoin outerJoin |
+	start := FBStartEvent new.
+	outerFork := start addOutgoingNode: (FBParallelNode named: 'outer fork').
+	innerFork := outerFork addOutgoingNode: (FBParallelNode named: 'inner fork').
+	task := innerFork addOutgoingNode: ((FBPluggableTask named: 'task') block: [ :activation | activation value: activation argument ]).
+	innerJoin := task addOutgoingNode: (FBParallelJoinNode named: 'inner join').
+	outerJoin := innerJoin addOutgoingNode: (FBParallelJoinNode named: 'outer join').
+	end := outerJoin addOutgoingNode: FBEndEvent new.
+
+	^ FBFlow new start: start
+]
+
+{ #category : 'tests' }
 FBFlow class >> parallelFlowOpen [
 	<sampleInstance>
 	| start end parallel p1 p2 |
