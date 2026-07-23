@@ -152,6 +152,19 @@ FBFlowExecutorTest >> testScheduleStartAddsStartNodeAsPendingAndMarksCreated [
 ]
 
 { #category : 'as yet unclassified' }
+FBFlowExecutorTest >> testIsCreatedToleratesRawTransitionPendingFromBeforeWorkItemMigration [
+	"a flow instance persisted before FBWorkItem existed can still have a raw
+	FBTransition sitting in pending after being loaded back into a newer image -
+	isCreated must not blow up on that shape, see FBTransition>>transition"
+	| instance realTransition |
+	instance := FBFlow simpleFlow newInstance.
+	instance initializeExecutor.
+	realTransition := instance start outgoing first.
+	instance executor instVarNamed: #pending put: (OrderedCollection with: realTransition).
+	self deny: instance executor isCreated
+]
+
+{ #category : 'as yet unclassified' }
 FBFlowExecutorTest >> testStartActivationTokenHasNoParent [
 	| instance |
 	instance := FBFlow simpleFlow newInstance.
