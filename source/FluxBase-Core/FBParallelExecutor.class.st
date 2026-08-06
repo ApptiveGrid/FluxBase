@@ -144,9 +144,18 @@ FBParallelExecutor >> node: aFBParallelNode [
 
 { #category : 'services' }
 FBParallelExecutor >> outputFor: anActivation [
-
-	(self activationOf: node) isDone ifTrue: [  ^ anActivation value first].
-	^ anActivation value at: self index .
+	"read the current item straight from this executor's own list/index -
+	the same source #lastValueOf: uses when node == self node - rather than
+	from anActivation's value. anActivation's value is a display-only hack
+	the node's #execute stashes for the frontend (see e.g.
+	AGParallelNodeBehavior>>execute) and, when this parallel node is itself
+	nested inside an outer parallel scope, has one slot per *outer* iteration
+	- not per this (inner) executor's own iteration - so indexing it with
+	this executor's index tears into the wrong dimension and can hand back
+	the wrong item, or the whole nested collection, instead of a single
+	current item (the 'parallel node in parallel node' bug)"
+	(self activationOf: node) isDone ifTrue: [ ^ list first ].
+	^ list at: index
 ]
 
 { #category : 'services' }
