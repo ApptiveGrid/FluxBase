@@ -302,6 +302,32 @@ FBFlowTest >> testNestedParallelNodeJoined [
 ]
 
 { #category : 'tests' }
+FBFlowTest >> testNestedParallelNodeJoinedOutput [
+	"companion to #testNestedParallelNodeJoined, checking #output (what a
+	flow-run inspector displays) rather than the raw #values ivar: a join
+	node's own activation isn't a parallel/split node, so it never goes
+	through FBParallelNode>>outputFor:'s #parallelExecutorFrom: lookup -
+	#output has to resolve straight to the join's own already-aggregated
+	#value instead, regardless of nesting or which executor created it"
+	| flow instance innerJoin outerJoin |
+	flow := FBFlow nestedParallelFlowJoined.
+	innerJoin := flow nodes detect: [ :each | each name = 'inner join' ].
+	outerJoin := flow nodes detect: [ :each | each name = 'outer join' ].
+	instance := flow newInstance.
+	instance executeWith: { #(1 2). #(3 4 5). #(6) }.
+
+	self assert:
+		((instance activations select: [ :each | each node = innerJoin ])
+			collect: [ :each | each output ])
+		equals: (OrderedCollection with: #(1 2) with: #(3 4 5) with: #(6)).
+
+	self assert:
+		((instance activations select: [ :each | each node = outerJoin ])
+			collect: [ :each | each output ])
+		equals: (OrderedCollection with: (Array with: #(1 2) with: #(3 4 5) with: #(6)))
+]
+
+{ #category : 'tests' }
 FBFlowTest >> testParallelNodeOpenEnd [
 	| flow instance |
 	flow := FBFlow parallelFlowOpen.
