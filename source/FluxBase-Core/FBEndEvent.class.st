@@ -23,7 +23,12 @@ FBEndEvent >> defaultBehaviorClass [
 ]
 
 { #category : 'initialization' }
-FBEndEvent >> initialize [ 
+FBEndEvent >> initialize [
 	super initialize.
 	name := 'end'
+]
+
+{ #category : 'testing' }
+FBEndEvent >> isFlowTerminal [
+	^ true
 ]

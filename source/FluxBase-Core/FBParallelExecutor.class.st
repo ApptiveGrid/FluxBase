@@ -35,8 +35,13 @@ FBParallelExecutor >> activationClass [
 ]
 
 { #category : 'accessing' }
-FBParallelExecutor >> atEnd [ 
+FBParallelExecutor >> atEnd [
 	^((index = list size) and: [ pending isEmpty ])and:[suspended isEmpty]
+]
+
+{ #category : 'services' }
+FBParallelExecutor >> buildImpliedContinuationNode [
+	^ node impliedJoinNodeClass new
 ]
 
 { #category : 'services' }

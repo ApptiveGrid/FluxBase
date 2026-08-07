@@ -80,7 +80,7 @@ FBBaseActivation >> followAll: aCollection [
 
 { #category : 'as yet unclassified' }
 FBBaseActivation >> followAllOutgoing [
-	self node outgoing do: [ :transition |
+	(self node effectiveOutgoingFor: self) do: [ :transition |
 		 self followTransition: transition ]
 ]
 
