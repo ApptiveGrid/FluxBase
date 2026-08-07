@@ -86,6 +86,12 @@ FBParallelActivation >> output [
 	(see FBParallelNode>>outputFor: and the 'parallel node in parallel
 	node' bug)"
 	(self node isKindOf: FBParallelNode) ifTrue: [ ^ self node outputFor: self ].
+	"a join node's own activation is not a parallel/split node, so it never
+	goes through FBParallelNode>>outputFor:'s #parallelExecutorFrom: lookup
+	above - by the time it's done, #value (values, aliased to arguments by
+	FBParallelJoinNodeBehavior>>execute) already *is* the aggregated result,
+	needing no further executor-based resolution regardless of nesting"
+	(self node isKindOf: FBParallelJoinNode) ifTrue: [ ^ self value ].
 	^ executor outputFor: self
 ]
 
