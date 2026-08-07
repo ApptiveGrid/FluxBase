@@ -40,7 +40,7 @@ FBParallelExecutor >> atEnd [
 ]
 
 { #category : 'services' }
-FBParallelExecutor >> buildImpliedTarget [
+FBParallelExecutor >> buildImpliedContinuationNode [
 	^ node impliedJoinNodeClass new
 ]
 
