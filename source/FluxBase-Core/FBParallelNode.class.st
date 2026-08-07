@@ -19,7 +19,17 @@ FBParallelNode >> activationClass [
 
 { #category : 'accessing' }
 FBParallelNode >> defaultBehaviorClass [
-	^ FBParallelNodeBehavior 
+	^ FBParallelNodeBehavior
+]
+
+{ #category : 'accessing' }
+FBParallelNode >> impliedJoinNodeClass [
+	"the join class synthesized to implicitly close this node's own scope
+	when nothing explicit follows its branch (see
+	FBParallelExecutor>>buildImpliedTarget). ApptiveBase's AGParallelNode
+	overrides this to answer AGParallelJoinNode instead"
+
+	^ FBParallelJoinNode
 ]
 
 { #category : 'accessing' }

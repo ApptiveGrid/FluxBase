@@ -328,6 +328,45 @@ FBFlowTest >> testNestedParallelNodeJoinedOutput [
 ]
 
 { #category : 'tests' }
+FBFlowTest >> testNestedParallelNodeImplicitlyJoinsAndEnds [
+	"regression test for making the implicit end of a flow/parallel scope
+	real-but-invisible instead of purely inferred from 'nothing left to
+	process': #nestedParallelFlowImplicit has no join or end node at all,
+	yet each scope must still get its own synthesized (never persisted,
+	never added to the flow's own node graph) join, and the whole flow its
+	own synthesized end - functioning identically to the explicit case in
+	#testNestedParallelNodeJoined/#testNestedParallelNodeJoinedOutput"
+	| flow instance joins innerJoins outerJoins ends |
+	flow := FBFlow nestedParallelFlowImplicit.
+	instance := flow newInstance.
+	instance executeWith: { #(1 2). #(3 4 5). #(6) }.
+
+	self assert: instance state equals: #done.
+
+	joins := instance activations select: [ :each |
+		         each node isKindOf: FBParallelJoinNode ].
+	"the inner (per-outer-iteration) implicit join collects each iteration's
+	own flat list of items; the outer implicit join collects one entry per
+	outer iteration, each of those entries being one of those flat lists -
+	i.e. a collection of collections. that structural difference is what
+	distinguishes them, since neither ever gets a name"
+	innerJoins := joins select: [ :each |
+		              each output noneSatisfy: [ :e | e isCollection ] ].
+	outerJoins := joins reject: [ :each | innerJoins includes: each ].
+
+	self assert:
+		(innerJoins collect: [ :each | each output ]) asSet
+		equals: (Set withAll: { #(1 2). #(3 4 5). #(6) }).
+
+	self assert: outerJoins size equals: 1.
+	self assert: outerJoins anyOne output
+		equals: (Array with: #(1 2) with: #(3 4 5) with: #(6)).
+
+	ends := instance activations select: [ :each | each node isKindOf: FBEndEvent ].
+	self assert: ends size equals: 1
+]
+
+{ #category : 'tests' }
 FBFlowTest >> testParallelNodeOpenEnd [
 	| flow instance |
 	flow := FBFlow parallelFlowOpen.

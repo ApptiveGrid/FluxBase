@@ -112,6 +112,23 @@ FBFlow class >> nestedParallelFlowJoined [
 ]
 
 { #category : 'tests' }
+FBFlow class >> nestedParallelFlowImplicit [
+	"same shape as #nestedParallelFlowJoined, but without any explicit join
+	or end node at all - 'task' just dead-ends. Used to regression-test that
+	FBNode>>effectiveOutgoingFor: correctly synthesizes an implicit join per
+	scope (and, eventually, an implicit flow end) instead of the flow just
+	silently stopping partway"
+	<sampleInstance>
+	| start outerFork innerFork task |
+	start := FBStartEvent new.
+	outerFork := start addOutgoingNode: (FBParallelNode named: 'outer fork').
+	innerFork := outerFork addOutgoingNode: (FBParallelNode named: 'inner fork').
+	task := innerFork addOutgoingNode: ((FBPluggableTask named: 'task') block: [ :activation | activation value: activation argument ]).
+
+	^ FBFlow new start: start
+]
+
+{ #category : 'tests' }
 FBFlow class >> parallelFlowOpen [
 	<sampleInstance>
 	| start end parallel p1 p2 |

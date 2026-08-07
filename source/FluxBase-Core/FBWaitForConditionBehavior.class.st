@@ -9,6 +9,6 @@ Class {
 { #category : 'execution' }
 FBWaitForConditionBehavior >> execute [
 	(self node evaluateConditionWith: activation argument)
-		ifTrue: [ activation followAll: self node outgoing ]
+		ifTrue: [ activation followAllOutgoing ]
 		ifFalse: [ activation waitForNode: self node ]
 ]

@@ -5,7 +5,9 @@ Class {
 		'flowInstance',
 		'pending',
 		'suspended',
-		'suspendedExecutor'
+		'suspendedExecutor',
+		'impliedTarget',
+		'impliedTransition'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -123,6 +125,46 @@ FBBaseExecutor >> isRunning [
 { #category : 'testing' }
 FBBaseExecutor >> isWaiting [
 	^ pending isEmpty & suspended notEmpty
+]
+
+{ #category : 'services' }
+FBBaseExecutor >> buildImpliedTarget [
+	"the node a dead-ending activation implicitly continues to when this
+	executor is the current one - a plain flow end by default (used by
+	FBFlowExecutor, the root/outermost case); FBParallelExecutor overrides
+	this to answer an implicit join for its own scope instead"
+
+	^ FBEndEvent new
+]
+
+{ #category : 'accessing' }
+FBBaseExecutor >> impliedTarget [
+	^ impliedTarget ifNil: [ impliedTarget := self buildImpliedTarget ]
+]
+
+{ #category : 'services' }
+FBBaseExecutor >> impliedTransition [
+	"a single, lazily-created, ad-hoc, never-persisted transition to this
+	executor's implied target, reused (with its #source reassigned per
+	call, see #impliedTransitionFrom:) for this executor's whole lifetime.
+	sharing *one* transition object - rather than one per distinct source
+	node - is what makes e.g. every iteration of a parallel scope's loop
+	body funnel into the *same* implicit join activation, exactly like an
+	explicit join would (FBParallelExecutor>>newActivation:'s activation
+	cache is keyed by transition identity). safe only because each
+	dead-end is resolved and fully consumed (queued via #addPending: and
+	processed by the very next #step) before the next one can reassign
+	#source - see FBNode>>effectiveOutgoingFor:. never call #attach/
+	#addTo: on it: it must never be wired into any real node's own
+	(possibly persistent, definition-level) #outgoing"
+
+	^ impliedTransition ifNil: [
+		  impliedTransition := FBTransition new target: self impliedTarget ]
+]
+
+{ #category : 'services' }
+FBBaseExecutor >> impliedTransitionFrom: aFBNode [
+	^ self impliedTransition source: aFBNode; yourself
 ]
 
 { #category : 'accessing' }
