@@ -141,6 +141,18 @@ FBFlow class >> parallelFlowOpen [
 ]
 
 { #category : 'tests' }
+FBFlow class >> parallelFlowNoOutgoing [
+	"a parallel node with no outgoing transition at all - literally the last
+	node in the flow, no loop body. Regression fixture for the 'never stops'
+	bug (Board-Ticket CMSIs-lZ3HA)."
+	<sampleInstance>
+	| start |
+	start := FBStartEvent new.
+	start addOutgoingNode: (FBParallelNode named: 'parallel task').
+	^ FBFlow new start: start
+]
+
+{ #category : 'tests' }
 FBFlow class >> parallelFlowWaiting [
 	<sampleInstance>
 	| start end parallel p1 wait |
