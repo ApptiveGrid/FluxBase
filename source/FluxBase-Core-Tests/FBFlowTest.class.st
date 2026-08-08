@@ -261,6 +261,24 @@ FBFlowTest >> testParallelNodeEmptyList [
 ]
 
 { #category : 'tests' }
+FBFlowTest >> testParallelNodeAsLastNodeStops [
+	"regression test: a parallel node with no outgoing transition (literally
+	the last node in the flow, no loop body) used to leave the flow instance
+	stuck forever - pushExecutor: seeded the new FBParallelExecutor's pending
+	from node outgoing, which was empty, so the driving loop in
+	FBFlowInstance>>execute exited without ever popping the executor back to
+	its parent, leaving #atEnd permanently false. Board-Ticket CMSIs-lZ3HA."
+	| flow instance |
+	flow := FBFlow parallelFlowNoOutgoing.
+	instance := flow newInstance.
+	instance executeWith: { 1. 2. 3 }.
+	self assert: instance atEnd.
+	self assert: instance state equals: #done.
+	"no parallel executor should have been initialized as there was no outgoing node to fan out to"
+	self assert: instance executors size equals: 1.
+]
+
+{ #category : 'tests' }
 FBFlowTest >> testParallelNodeJoined [
 	| flow instance |
 	flow := FBFlow parallelFlowJoined.
