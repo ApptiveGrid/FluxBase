@@ -353,6 +353,17 @@ FBNode >> removeOutgoing: aFBTransition [
 	outgoing remove: aFBTransition 
 ]
 
+{ #category : 'as yet unclassified' }
+FBNode >> resultTransition: aSymbol [
+    "convenience analogous to #when: -- builds an unattached transition to self,
+    tagged with resultName, for wiring result-specific outgoing branches
+    (e.g. from a FBSubFlowNode). use as: aNode --> (target resultTransition: #error)"
+    ^ self transitionClass new
+        target: self;
+        resultName: aSymbol;
+        yourself
+]
+
 { #category : 'initialization' }
 FBNode >> setFlow: aFlow [
 	flow := aFlow

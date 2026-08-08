@@ -5,6 +5,21 @@ Class {
 	#package : 'FluxBase-Core-Tests'
 }
 
+{ #category : 'tests' }
+FBMergeGatewayTest >> testAllExposedNodeClassesHaveATypeName [
+	"FBNode class>>exposedNodes (and #withType:) call #typeName on every
+	exposed node class. FBAndJoin/FBOrJoin used to lack an override and
+	would blow up with a doesNotUnderstand as soon as any code (e.g.
+	AGFlowHolder sample flows, REST node-type listing) iterated over the
+	full exposed set. exposedNodeClasses/exposedNodes/withType: themselves
+	are ApptiveBase-Core extensions, not available when testing FluxBase
+	standalone, so this reproduces the equivalent check using only
+	FluxBase-Core primitives (allSubclasses/isAbstract/typeName)."
+
+	(FBNode allSubclasses reject: #isAbstract) do: [ :each |
+		self shouldnt: [ each typeName ] raise: MessageNotUnderstood ]
+]
+
 { #category : 'as yet unclassified' }
 FBMergeGatewayTest >> testCannotHaveMoreThanOneOutgoingTransition [
 	| merge a b |
@@ -26,19 +41,4 @@ FBMergeGatewayTest >> testMergeGatewayIsAbstractOnlyForTheBaseClass [
 { #category : 'tests' }
 FBMergeGatewayTest >> testSimpleMergeIsAKindOfMergeGateway [
 	self assert: (FBSimpleMerge inheritsFrom: FBMergeGateway)
-]
-
-{ #category : 'tests' }
-FBMergeGatewayTest >> testAllExposedNodeClassesHaveATypeName [
-	"FBNode class>>exposedNodes (and #withType:) call #typeName on every
-	exposed node class. FBAndJoin/FBOrJoin used to lack an override and
-	would blow up with a doesNotUnderstand as soon as any code (e.g.
-	AGFlowHolder sample flows, REST node-type listing) iterated over the
-	full exposed set. exposedNodeClasses/exposedNodes/withType: themselves
-	are ApptiveBase-Core extensions, not available when testing FluxBase
-	standalone, so this reproduces the equivalent check using only
-	FluxBase-Core primitives (allSubclasses/isAbstract/typeName)."
-
-	(FBNode allSubclasses reject: #isAbstract) do: [ :each |
-		self shouldnt: [ each typeName ] raise: MessageNotUnderstood ]
 ]

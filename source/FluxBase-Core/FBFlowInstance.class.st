@@ -11,7 +11,9 @@ Class {
 		'activations',
 		'metadata',
 		'joinStates',
-		'splitBranchCounts'
+		'splitBranchCounts',
+		'subFlowInstances',
+		'scope'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -77,6 +79,11 @@ FBFlowInstance >> addEvent: aFBFlowEvent [
 			 flowInstance: self;
 			 yourself).
 	self announce: aFBFlowEvent
+]
+
+{ #category : 'accessing' }
+FBFlowInstance >> addSubFlowInstance: aFBFlowInstance [
+    self subFlowInstances add: aFBFlowInstance
 ]
 
 { #category : 'announcements' }
@@ -331,6 +338,16 @@ FBFlowInstance >> rootExecutor [
 ]
 
 { #category : 'accessing' }
+FBFlowInstance >> scope [
+    ^ scope ifNil: [ scope := FBScope rootOwnedBy: nil ]
+]
+
+{ #category : 'accessing' }
+FBFlowInstance >> scope: aFBScope [
+    scope := aFBScope
+]
+
+{ #category : 'accessing' }
 FBFlowInstance >> start [
 	^ flow start
 ]
@@ -350,6 +367,11 @@ FBFlowInstance >> state [
 FBFlowInstance >> step [
 	self initializeExecutor.
 	^ self executor step
+]
+
+{ #category : 'accessing' }
+FBFlowInstance >> subFlowInstances [
+    ^ subFlowInstances ifNil: [ subFlowInstances := OrderedCollection new ]
 ]
 
 { #category : 'accessing' }

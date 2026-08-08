@@ -203,6 +203,37 @@ FBFlowTest >> testIsNotCyclic [
 ]
 
 { #category : 'tests' }
+FBFlowTest >> testNestedParallelNodeJoined [
+	"regression test: a parallel node nested inside another parallel node used
+	to crash (index out of bounds) or silently duplicate/mix up values across
+	outer iterations, because the inner join's activation - scoped to the
+	inner (smaller) list - was read back using the outer executor's index"
+	| flow instance innerJoin outerJoin |
+	flow := FBFlow nestedParallelFlowJoined.
+	innerJoin := flow nodes detect: [ :each | each name = 'inner join' ].
+	outerJoin := flow nodes detect: [ :each | each name = 'outer join' ].
+	instance := flow newInstance.
+	instance executeWith: { #(1 2). #(3 4 5). #(6) }.
+
+	self assert: instance atEnd.
+	self assert: instance state equals: #done.
+
+	"each outer iteration gets its own inner join activation, holding exactly
+	that iteration's (and only that iteration's) inner results"
+	self assert:
+		((instance activations select: [ :each | each node = innerJoin ])
+			collect: [ :each | each instVarNamed: #values ])
+		equals: (OrderedCollection with: #(1 2) with: #(3 4 5) with: #(6)).
+
+	"the single, reused outer join activation gathers one entry per outer
+	iteration, each being that iteration's full inner join result"
+	self assert:
+		((instance activations select: [ :each | each node = outerJoin ])
+			collect: [ :each | each instVarNamed: #values ])
+		equals: (OrderedCollection with: (Array with: #(1 2) with: #(3 4 5) with: #(6)))
+]
+
+{ #category : 'tests' }
 FBFlowTest >> testNestedParallelNodePassesInnerElements [
     | start outer inner collect end flow instance seen |
 
@@ -268,37 +299,6 @@ FBFlowTest >> testParallelNodeJoined [
 	instance executeWith: { 1 . 2 . 3 }.
 	self assert: instance atEnd.
 
-]
-
-{ #category : 'tests' }
-FBFlowTest >> testNestedParallelNodeJoined [
-	"regression test: a parallel node nested inside another parallel node used
-	to crash (index out of bounds) or silently duplicate/mix up values across
-	outer iterations, because the inner join's activation - scoped to the
-	inner (smaller) list - was read back using the outer executor's index"
-	| flow instance innerJoin outerJoin |
-	flow := FBFlow nestedParallelFlowJoined.
-	innerJoin := flow nodes detect: [ :each | each name = 'inner join' ].
-	outerJoin := flow nodes detect: [ :each | each name = 'outer join' ].
-	instance := flow newInstance.
-	instance executeWith: { #(1 2). #(3 4 5). #(6) }.
-
-	self assert: instance atEnd.
-	self assert: instance state equals: #done.
-
-	"each outer iteration gets its own inner join activation, holding exactly
-	that iteration's (and only that iteration's) inner results"
-	self assert:
-		((instance activations select: [ :each | each node = innerJoin ])
-			collect: [ :each | each instVarNamed: #values ])
-		equals: (OrderedCollection with: #(1 2) with: #(3 4 5) with: #(6)).
-
-	"the single, reused outer join activation gathers one entry per outer
-	iteration, each being that iteration's full inner join result"
-	self assert:
-		((instance activations select: [ :each | each node = outerJoin ])
-			collect: [ :each | each instVarNamed: #values ])
-		equals: (OrderedCollection with: (Array with: #(1 2) with: #(3 4 5) with: #(6)))
 ]
 
 { #category : 'tests' }
