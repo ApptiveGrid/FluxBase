@@ -38,7 +38,16 @@ FBParallelNode >> outputFor: anActivation [
 	if no execution in progress, returns the first element of the input value"
 
 	| executor |
-	
-	executor := anActivation instance parallelExecutorFrom: self ifAbsent: ["if there was no input, there was no output for the parallel node"^ nil].
+
+	executor := anActivation instance parallelExecutorFrom: self ifAbsent: [
+		"no executor was ever pushed for this node - either the input collection was empty, or
+		the node has no outgoing transition (no loop body was ever entered, see
+		FBParallelNodeBehavior>>execute). fall back to the raw activation value in that case,
+		unwrapping a collection to its first element to match the with-executor convention above"
+		| v |
+		v := anActivation value.
+		^ (v isCollection and: [ v isSequenceable and: [ v isString not ] ])
+			  ifTrue: [ v ifEmpty: [ nil ] ifNotEmpty: [ :notEmpty | notEmpty first ] ]
+			  ifFalse: [ v ] ].
 	^ executor outputFor: anActivation
 ]
