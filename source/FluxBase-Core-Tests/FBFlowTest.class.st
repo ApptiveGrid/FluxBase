@@ -362,6 +362,29 @@ FBFlowTest >> testNestedParallelNodeJoinedOutput [
 ]
 
 { #category : 'tests' }
+FBFlowTest >> testNestedParallelNodeJoinedActivationStatus [
+	"regression test: a fork's and a join's own activation never reached #done -
+	FBParallelExecutor>>continue's own '(self activationOf: node) done. self stop' tail is
+	only reached when nothing else pops the executor first, but a join always pops it
+	directly via #popThenResume: once #atEnd, bypassing that tail (and never calling #done
+	on its own activation either). Not specific to nesting - reproduces with a single-level
+	parallel+join too - but nesting is where a flow-run status display first surfaced it,
+	since every fork/join in the scope stayed stuck on #created."
+	| flow instance outerFork innerFork innerJoin outerJoin |
+	flow := FBFlow nestedParallelFlowJoined.
+	outerFork := flow nodes detect: [ :each | each name = 'outer fork' ].
+	innerFork := flow nodes detect: [ :each | each name = 'inner fork' ].
+	innerJoin := flow nodes detect: [ :each | each name = 'inner join' ].
+	outerJoin := flow nodes detect: [ :each | each name = 'outer join' ].
+	instance := flow newInstance.
+	instance executeWith: { #(1 2). #(3 4 5). #(6) }.
+
+	{ outerFork. innerFork. innerJoin. outerJoin } do: [ :node |
+		(instance activations select: [ :each | each node = node ]) do: [ :activation |
+			self assert: activation state equals: #done ] ]
+]
+
+{ #category : 'tests' }
 FBFlowTest >> testNestedParallelNodeImplicitlyJoinsAndEnds [
 	"regression test for making the implicit end of a flow/parallel scope
 	real-but-invisible instead of purely inferred from 'nothing left to
