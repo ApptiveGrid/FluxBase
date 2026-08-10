@@ -279,6 +279,22 @@ FBFlowTest >> testParallelNodeAsLastNodeStops [
 ]
 
 { #category : 'tests' }
+FBFlowTest >> testParallelNodeAsLastNodeHasOutput [
+	"companion to #testParallelNodeAsLastNodeStops: fixing the hang left the parallel node's
+	own activation output unset (nil) even with a non-empty input collection - the
+	empty-collection guard in FBParallelNodeBehavior>>execute short-circuited before the value
+	was ever assigned, and FBParallelNode>>outputFor: has no FBParallelExecutor to derive an
+	output from once outgoing is empty. Board-Ticket Cksv1AGDNG0."
+	| flow instance parallelNode activation |
+	flow := FBFlow parallelFlowNoOutgoing.
+	parallelNode := flow nodes detect: [ :each | each isKindOf: FBParallelNode ].
+	instance := flow newInstance.
+	instance executeWith: { 1 . 2 . 3 }.
+	activation := instance activations detect: [ :each | each node = parallelNode ].
+	self assert: activation output equals: 1
+]
+
+{ #category : 'tests' }
 FBFlowTest >> testParallelNodeJoined [
 	| flow instance |
 	flow := FBFlow parallelFlowJoined.
