@@ -35,8 +35,13 @@ FBParallelExecutor >> activationClass [
 ]
 
 { #category : 'accessing' }
-FBParallelExecutor >> atEnd [ 
+FBParallelExecutor >> atEnd [
 	^((index = list size) and: [ pending isEmpty ])and:[suspended isEmpty]
+]
+
+{ #category : 'services' }
+FBParallelExecutor >> buildImpliedContinuationNode [
+	^ node impliedJoinNodeClass new
 ]
 
 { #category : 'services' }
@@ -144,9 +149,26 @@ FBParallelExecutor >> node: aFBParallelNode [
 
 { #category : 'services' }
 FBParallelExecutor >> outputFor: anActivation [
-
-	(self activationOf: node) isDone ifTrue: [  ^ anActivation value first].
-	^ anActivation value at: self index .
+	"two distinct callers reach this method with two distinct meanings:
+	- a regular task's activation, created inside this executor's own scope
+	  (anActivation node ~= self node): its own #value is one slot per
+	  *this* executor's iteration, so slicing anActivation value by
+	  self index is correct - this is the original, unchanged behavior.
+	- this same parallel node's own self-activation (anActivation node ==
+	  self node), reached via FBParallelNode>>outputFor:'s
+	  #parallelExecutorFrom: lookup, which guarantees self is the node's
+	  own freshly-pushed executor: here anActivation's #value is just a
+	  display-only hack (see e.g. AGParallelNodeBehavior>>execute) that,
+	  when this node is itself nested inside an outer parallel scope, has
+	  one slot per *outer* iteration rather than per this executor's own -
+	  so it must be ignored in favor of this executor's own list/index,
+	  the same source #lastValueOf: uses (the 'parallel node in parallel
+	  node' bug)"
+	self node == anActivation node ifTrue: [
+		(self activationOf: node) isDone ifTrue: [ ^ list first ].
+		^ list at: index ].
+	(self activationOf: node) isDone ifTrue: [ ^ anActivation value first ].
+	^ anActivation value at: self index
 ]
 
 { #category : 'services' }

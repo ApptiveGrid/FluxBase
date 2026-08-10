@@ -20,7 +20,7 @@ FBPluggableTask >> activateWith: anActivation [
 
 	block cull: anActivation.
 	anActivation done.
-	anActivation followAll: self outgoing.
+	anActivation followAllOutgoing.
 
 ]
 

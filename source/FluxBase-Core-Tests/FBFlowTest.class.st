@@ -203,6 +203,45 @@ FBFlowTest >> testIsNotCyclic [
 ]
 
 { #category : 'tests' }
+FBFlowTest >> testNestedParallelNodeImplicitlyJoinsAndEnds [
+	"regression test for making the implicit end of a flow/parallel scope
+	real-but-invisible instead of purely inferred from 'nothing left to
+	process': #nestedParallelFlowImplicit has no join or end node at all,
+	yet each scope must still get its own synthesized (never persisted,
+	never added to the flow's own node graph) join, and the whole flow its
+	own synthesized end - functioning identically to the explicit case in
+	#testNestedParallelNodeJoined/#testNestedParallelNodeJoinedOutput"
+	| flow instance joins innerJoins outerJoins ends |
+	flow := FBFlow nestedParallelFlowImplicit.
+	instance := flow newInstance.
+	instance executeWith: { #(1 2). #(3 4 5). #(6) }.
+
+	self assert: instance state equals: #done.
+
+	joins := instance activations select: [ :each |
+		         each node isKindOf: FBParallelJoinNode ].
+	"the inner (per-outer-iteration) implicit join collects each iteration's
+	own flat list of items; the outer implicit join collects one entry per
+	outer iteration, each of those entries being one of those flat lists -
+	i.e. a collection of collections. that structural difference is what
+	distinguishes them, since neither ever gets a name"
+	innerJoins := joins select: [ :each |
+		              each output noneSatisfy: [ :e | e isCollection ] ].
+	outerJoins := joins reject: [ :each | innerJoins includes: each ].
+
+	self assert:
+		(innerJoins collect: [ :each | each output ]) asSet
+		equals: (Set withAll: { #(1 2). #(3 4 5). #(6) }).
+
+	self assert: outerJoins size equals: 1.
+	self assert: outerJoins anyOne output
+		equals: (Array with: #(1 2) with: #(3 4 5) with: #(6)).
+
+	ends := instance activations select: [ :each | each node isKindOf: FBEndEvent ].
+	self assert: ends size equals: 1
+]
+
+{ #category : 'tests' }
 FBFlowTest >> testNestedParallelNodeJoined [
 	"regression test: a parallel node nested inside another parallel node used
 	to crash (index out of bounds) or silently duplicate/mix up values across
@@ -230,6 +269,32 @@ FBFlowTest >> testNestedParallelNodeJoined [
 	self assert:
 		((instance activations select: [ :each | each node = outerJoin ])
 			collect: [ :each | each instVarNamed: #values ])
+		equals: (OrderedCollection with: (Array with: #(1 2) with: #(3 4 5) with: #(6)))
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testNestedParallelNodeJoinedOutput [
+	"companion to #testNestedParallelNodeJoined, checking #output (what a
+	flow-run inspector displays) rather than the raw #values ivar: a join
+	node's own activation isn't a parallel/split node, so it never goes
+	through FBParallelNode>>outputFor:'s #parallelExecutorFrom: lookup -
+	#output has to resolve straight to the join's own already-aggregated
+	#value instead, regardless of nesting or which executor created it"
+	| flow instance innerJoin outerJoin |
+	flow := FBFlow nestedParallelFlowJoined.
+	innerJoin := flow nodes detect: [ :each | each name = 'inner join' ].
+	outerJoin := flow nodes detect: [ :each | each name = 'outer join' ].
+	instance := flow newInstance.
+	instance executeWith: { #(1 2). #(3 4 5). #(6) }.
+
+	self assert:
+		((instance activations select: [ :each | each node = innerJoin ])
+			collect: [ :each | each output ])
+		equals: (OrderedCollection with: #(1 2) with: #(3 4 5) with: #(6)).
+
+	self assert:
+		((instance activations select: [ :each | each node = outerJoin ])
+			collect: [ :each | each output ])
 		equals: (OrderedCollection with: (Array with: #(1 2) with: #(3 4 5) with: #(6)))
 ]
 
@@ -276,6 +341,24 @@ FBFlowTest >> testNodeWithIdError [
 	self 
 		should: [ flow nodeWithId: #bogus ]
 		raise: FBNodeNotFound 
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testParallelNodeAsLastNodeStops [
+	"regression test: a parallel node with no outgoing transition (literally
+	the last node in the flow, no loop body) used to leave the flow instance
+	stuck forever - pushExecutor: seeded the new FBParallelExecutor's pending
+	from node outgoing, which was empty, so the driving loop in
+	FBFlowInstance>>execute exited without ever popping the executor back to
+	its parent, leaving #atEnd permanently false. Board-Ticket CMSIs-lZ3HA."
+	| flow instance |
+	flow := FBFlow parallelFlowNoOutgoing.
+	instance := flow newInstance.
+	instance executeWith: { 1. 2. 3 }.
+	self assert: instance atEnd.
+	self assert: instance state equals: #done.
+	"no parallel executor should have been initialized as there was no outgoing node to fan out to"
+	self assert: instance executors size equals: 1.
 ]
 
 { #category : 'tests' }

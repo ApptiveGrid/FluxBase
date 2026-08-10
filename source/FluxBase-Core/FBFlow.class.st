@@ -78,6 +78,23 @@ FBFlow class >> gatewayedFlow [
 ]
 
 { #category : 'tests' }
+FBFlow class >> nestedParallelFlowImplicit [
+	"same shape as #nestedParallelFlowJoined, but without any explicit join
+	or end node at all - 'task' just dead-ends. Used to regression-test that
+	FBNode>>effectiveOutgoingFor: correctly synthesizes an implicit join per
+	scope (and, eventually, an implicit flow end) instead of the flow just
+	silently stopping partway"
+	<sampleInstance>
+	| start outerFork innerFork task |
+	start := FBStartEvent new.
+	outerFork := start addOutgoingNode: (FBParallelNode named: 'outer fork').
+	innerFork := outerFork addOutgoingNode: (FBParallelNode named: 'inner fork').
+	task := innerFork addOutgoingNode: ((FBPluggableTask named: 'task') block: [ :activation | activation value: activation argument ]).
+
+	^ FBFlow new start: start
+]
+
+{ #category : 'tests' }
 FBFlow class >> nestedParallelFlowJoined [
 	"a parallel node whose own branch contains another, nested parallel node
 	(split into its own join before rejoining the outer split's join). Used to
@@ -108,6 +125,18 @@ FBFlow class >> parallelFlowJoined [
 	join := p2 addOutgoingNode: (FBParallelJoinNode named: 'join').
 	end := join addOutgoingNode: FBEndEvent new.
 	
+	^ FBFlow new start: start
+]
+
+{ #category : 'tests' }
+FBFlow class >> parallelFlowNoOutgoing [
+	"a parallel node with no outgoing transition at all - literally the last
+	node in the flow, no loop body. Regression fixture for the 'never stops'
+	bug (Board-Ticket CMSIs-lZ3HA)."
+	<sampleInstance>
+	| start |
+	start := FBStartEvent new.
+	start addOutgoingNode: (FBParallelNode named: 'parallel task').
 	^ FBFlow new start: start
 ]
 

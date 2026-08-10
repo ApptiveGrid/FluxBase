@@ -74,7 +74,24 @@ FBParallelActivation >> metadataSchema [
 
 { #category : 'accessing' }
 FBParallelActivation >> output [
-
+	"executor is this activation's *creating* executor - correct to ask
+	directly for a plain task's output (it was created inside that
+	executor's own scope, one slot per that scope's iteration). but when
+	this activation is a parallel node's own self-activation and that node
+	is itself nested inside an outer parallel scope, executor is the
+	*outer* scope that created it, not the freshly-pushed inner executor
+	that actually tracks this node's own iteration - so it must be
+	resolved through the node instead, the same way FBBaseActivation>>output
+	does, to reach the right (inner) executor via #parallelExecutorFrom:
+	(see FBParallelNode>>outputFor: and the 'parallel node in parallel
+	node' bug)"
+	(self node isKindOf: FBParallelNode) ifTrue: [ ^ self node outputFor: self ].
+	"a join node's own activation is not a parallel/split node, so it never
+	goes through FBParallelNode>>outputFor:'s #parallelExecutorFrom: lookup
+	above - by the time it's done, #value (values, aliased to arguments by
+	FBParallelJoinNodeBehavior>>execute) already *is* the aggregated result,
+	needing no further executor-based resolution regardless of nesting"
+	(self node isKindOf: FBParallelJoinNode) ifTrue: [ ^ self value ].
 	^ executor outputFor: self
 ]
 
