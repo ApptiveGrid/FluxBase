@@ -305,7 +305,13 @@ FBFlow >> convertNode: aNode toClass: aClass [
 	preserves its id, name, properties, behaviorClass override, and
 	connections (see FBNode>>convertTo:). Answers the new node. aNode ends
 	up fully detached and unreferenced; there is nothing further to clean up
-	on it."
+	on it.
+
+	This is durable purely because FBNode is never itself a Soil root -- it
+	only persists as part of its owning AGFlowHolder's cluster. If that ever
+	changes (FBNode class>>isSoilClusterRoot, or AGFlowInstanceHook's
+	transient `node` ivar becoming persisted), this method would also need
+	to re-root/retire the old and new node objects explicitly."
 	| newNode |
 	(nodesMap at: aNode id ifAbsent: [ nil ]) == aNode
 		ifFalse: [ FBNodeNotFound signal: 'node is not managed by this flow' ].
