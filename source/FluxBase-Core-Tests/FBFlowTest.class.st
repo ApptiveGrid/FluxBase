@@ -203,42 +203,105 @@ FBFlowTest >> testIsNotCyclic [
 ]
 
 { #category : 'tests' }
-FBFlowTest >> testNestedParallelNodeImplicitlyJoinsAndEnds [
-	"regression test for making the implicit end of a flow/parallel scope
-	real-but-invisible instead of purely inferred from 'nothing left to
-	process': #nestedParallelFlowImplicit has no join or end node at all,
-	yet each scope must still get its own synthesized (never persisted,
-	never added to the flow's own node graph) join, and the whole flow its
-	own synthesized end - functioning identically to the explicit case in
-	#testNestedParallelNodeJoined/#testNestedParallelNodeJoinedOutput"
-	| flow instance joins innerJoins outerJoins ends |
-	flow := FBFlow nestedParallelFlowImplicit.
+FBFlowTest >> testNestedParallelNodePassesInnerElements [
+    | start outer inner collect end flow instance seen |
+
+    seen := OrderedCollection new.
+
+    start := FBStartEvent new.
+    outer := start addOutgoingNode: (FBParallelNode named: 'outer').
+    inner := outer addOutgoingNode: (FBParallelNode named: 'inner').
+
+    collect := inner addOutgoingNode:
+        ((FBPluggableTask named: 'collect')
+            block: [ :activation |
+                seen add: activation argument.
+                activation value: activation argument.
+                activation done ];
+            yourself).
+
+    end := collect addOutgoingNode: FBEndEvent new.
+
+    flow := FBFlow new start: start.
+    instance := flow newInstance.
+
+    instance executeWith: { #(1 2). #(3 4) }.
+
+    self assert: seen asArray equals: #(1 2 3 4)
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testNodeWithId [
+	| flow id |
+	flow := FBFlow simpleFlow.
+	id := flow start id.
+	self assert: (flow nodeWithId: id) equals: flow start
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testNodeWithIdError [
+	| flow |
+	flow := FBFlow simpleFlow.
+	self 
+		should: [ flow nodeWithId: #bogus ]
+		raise: FBNodeNotFound 
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testParallelNodeEmptyList [
+	| flow instance |
+	flow := FBFlow parallelFlowOpen.
 	instance := flow newInstance.
-	instance executeWith: { #(1 2). #(3 4 5). #(6) }.
-
+	instance executeWith: { }.
+	self assert: instance atEnd.
 	self assert: instance state equals: #done.
+	"there should be one activation per node. The flow should have stopped at the parallel node because the collection was empty"
+	self assert: instance activations size equals:  2.
 
-	joins := instance activations select: [ :each |
-		         each node isKindOf: FBParallelJoinNode ].
-	"the inner (per-outer-iteration) implicit join collects each iteration's
-	own flat list of items; the outer implicit join collects one entry per
-	outer iteration, each of those entries being one of those flat lists -
-	i.e. a collection of collections. that structural difference is what
-	distinguishes them, since neither ever gets a name"
-	innerJoins := joins select: [ :each |
-		              each output noneSatisfy: [ :e | e isCollection ] ].
-	outerJoins := joins reject: [ :each | innerJoins includes: each ].
+]
 
-	self assert:
-		(innerJoins collect: [ :each | each output ]) asSet
-		equals: (Set withAll: { #(1 2). #(3 4 5). #(6) }).
+{ #category : 'tests' }
+FBFlowTest >> testParallelNodeAsLastNodeStops [
+	"regression test: a parallel node with no outgoing transition (literally
+	the last node in the flow, no loop body) used to leave the flow instance
+	stuck forever - pushExecutor: seeded the new FBParallelExecutor's pending
+	from node outgoing, which was empty, so the driving loop in
+	FBFlowInstance>>execute exited without ever popping the executor back to
+	its parent, leaving #atEnd permanently false. Board-Ticket CMSIs-lZ3HA."
+	| flow instance |
+	flow := FBFlow parallelFlowNoOutgoing.
+	instance := flow newInstance.
+	instance executeWith: { 1. 2. 3 }.
+	self assert: instance atEnd.
+	self assert: instance state equals: #done.
+	"no parallel executor should have been initialized as there was no outgoing node to fan out to"
+	self assert: instance executors size equals: 1.
+]
 
-	self assert: outerJoins size equals: 1.
-	self assert: outerJoins anyOne output
-		equals: (Array with: #(1 2) with: #(3 4 5) with: #(6)).
+{ #category : 'tests' }
+FBFlowTest >> testParallelNodeAsLastNodeHasOutput [
+	"companion to #testParallelNodeAsLastNodeStops: fixing the hang left the parallel node's
+	own activation output unset (nil) even with a non-empty input collection - the
+	empty-collection guard in FBParallelNodeBehavior>>execute short-circuited before the value
+	was ever assigned, and FBParallelNode>>outputFor: has no FBParallelExecutor to derive an
+	output from once outgoing is empty. Board-Ticket Cksv1AGDNG0."
+	| flow instance parallelNode activation |
+	flow := FBFlow parallelFlowNoOutgoing.
+	parallelNode := flow nodes detect: [ :each | each isKindOf: FBParallelNode ].
+	instance := flow newInstance.
+	instance executeWith: { 1 . 2 . 3 }.
+	activation := instance activations detect: [ :each | each node = parallelNode ].
+	self assert: activation output equals: 1
+]
 
-	ends := instance activations select: [ :each | each node isKindOf: FBEndEvent ].
-	self assert: ends size equals: 1
+{ #category : 'tests' }
+FBFlowTest >> testParallelNodeJoined [
+	| flow instance |
+	flow := FBFlow parallelFlowJoined.
+	instance := flow newInstance.
+	instance executeWith: { 1 . 2 . 3 }.
+	self assert: instance atEnd.
+
 ]
 
 { #category : 'tests' }
@@ -299,89 +362,65 @@ FBFlowTest >> testNestedParallelNodeJoinedOutput [
 ]
 
 { #category : 'tests' }
-FBFlowTest >> testNestedParallelNodePassesInnerElements [
-    | start outer inner collect end flow instance seen |
-
-    seen := OrderedCollection new.
-
-    start := FBStartEvent new.
-    outer := start addOutgoingNode: (FBParallelNode named: 'outer').
-    inner := outer addOutgoingNode: (FBParallelNode named: 'inner').
-
-    collect := inner addOutgoingNode:
-        ((FBPluggableTask named: 'collect')
-            block: [ :activation |
-                seen add: activation argument.
-                activation value: activation argument.
-                activation done ];
-            yourself).
-
-    end := collect addOutgoingNode: FBEndEvent new.
-
-    flow := FBFlow new start: start.
-    instance := flow newInstance.
-
-    instance executeWith: { #(1 2). #(3 4) }.
-
-    self assert: seen asArray equals: #(1 2 3 4)
-]
-
-{ #category : 'tests' }
-FBFlowTest >> testNodeWithId [
-	| flow id |
-	flow := FBFlow simpleFlow.
-	id := flow start id.
-	self assert: (flow nodeWithId: id) equals: flow start
-]
-
-{ #category : 'tests' }
-FBFlowTest >> testNodeWithIdError [
-	| flow |
-	flow := FBFlow simpleFlow.
-	self 
-		should: [ flow nodeWithId: #bogus ]
-		raise: FBNodeNotFound 
-]
-
-{ #category : 'tests' }
-FBFlowTest >> testParallelNodeAsLastNodeStops [
-	"regression test: a parallel node with no outgoing transition (literally
-	the last node in the flow, no loop body) used to leave the flow instance
-	stuck forever - pushExecutor: seeded the new FBParallelExecutor's pending
-	from node outgoing, which was empty, so the driving loop in
-	FBFlowInstance>>execute exited without ever popping the executor back to
-	its parent, leaving #atEnd permanently false. Board-Ticket CMSIs-lZ3HA."
-	| flow instance |
-	flow := FBFlow parallelFlowNoOutgoing.
+FBFlowTest >> testNestedParallelNodeJoinedActivationStatus [
+	"regression test: a fork's and a join's own activation never reached #done -
+	FBParallelExecutor>>continue's own '(self activationOf: node) done. self stop' tail is
+	only reached when nothing else pops the executor first, but a join always pops it
+	directly via #popThenResume: once #atEnd, bypassing that tail (and never calling #done
+	on its own activation either). Not specific to nesting - reproduces with a single-level
+	parallel+join too - but nesting is where a flow-run status display first surfaced it,
+	since every fork/join in the scope stayed stuck on #created."
+	| flow instance outerFork innerFork innerJoin outerJoin |
+	flow := FBFlow nestedParallelFlowJoined.
+	outerFork := flow nodes detect: [ :each | each name = 'outer fork' ].
+	innerFork := flow nodes detect: [ :each | each name = 'inner fork' ].
+	innerJoin := flow nodes detect: [ :each | each name = 'inner join' ].
+	outerJoin := flow nodes detect: [ :each | each name = 'outer join' ].
 	instance := flow newInstance.
-	instance executeWith: { 1. 2. 3 }.
-	self assert: instance atEnd.
+	instance executeWith: { #(1 2). #(3 4 5). #(6) }.
+
+	{ outerFork. innerFork. innerJoin. outerJoin } do: [ :node |
+		(instance activations select: [ :each | each node = node ]) do: [ :activation |
+			self assert: activation state equals: #done ] ]
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testNestedParallelNodeImplicitlyJoinsAndEnds [
+	"regression test for making the implicit end of a flow/parallel scope
+	real-but-invisible instead of purely inferred from 'nothing left to
+	process': #nestedParallelFlowImplicit has no join or end node at all,
+	yet each scope must still get its own synthesized (never persisted,
+	never added to the flow's own node graph) join, and the whole flow its
+	own synthesized end - functioning identically to the explicit case in
+	#testNestedParallelNodeJoined/#testNestedParallelNodeJoinedOutput"
+	| flow instance joins innerJoins outerJoins ends |
+	flow := FBFlow nestedParallelFlowImplicit.
+	instance := flow newInstance.
+	instance executeWith: { #(1 2). #(3 4 5). #(6) }.
+
 	self assert: instance state equals: #done.
-	"no parallel executor should have been initialized as there was no outgoing node to fan out to"
-	self assert: instance executors size equals: 1.
-]
 
-{ #category : 'tests' }
-FBFlowTest >> testParallelNodeEmptyList [
-	| flow instance |
-	flow := FBFlow parallelFlowOpen.
-	instance := flow newInstance.
-	instance executeWith: { }.
-	self assert: instance atEnd.
-	self assert: instance state equals: #done.
-	"there should be one activation per node. The flow should have stopped at the parallel node because the collection was empty"
-	self assert: instance activations size equals:  2.
+	joins := instance activations select: [ :each |
+		         each node isKindOf: FBParallelJoinNode ].
+	"the inner (per-outer-iteration) implicit join collects each iteration's
+	own flat list of items; the outer implicit join collects one entry per
+	outer iteration, each of those entries being one of those flat lists -
+	i.e. a collection of collections. that structural difference is what
+	distinguishes them, since neither ever gets a name"
+	innerJoins := joins select: [ :each |
+		              each output noneSatisfy: [ :e | e isCollection ] ].
+	outerJoins := joins reject: [ :each | innerJoins includes: each ].
 
-]
+	self assert:
+		(innerJoins collect: [ :each | each output ]) asSet
+		equals: (Set withAll: { #(1 2). #(3 4 5). #(6) }).
 
-{ #category : 'tests' }
-FBFlowTest >> testParallelNodeJoined [
-	| flow instance |
-	flow := FBFlow parallelFlowJoined.
-	instance := flow newInstance.
-	instance executeWith: { 1 . 2 . 3 }.
-	self assert: instance atEnd.
+	self assert: outerJoins size equals: 1.
+	self assert: outerJoins anyOne output
+		equals: (Array with: #(1 2) with: #(3 4 5) with: #(6)).
 
+	ends := instance activations select: [ :each | each node isKindOf: FBEndEvent ].
+	self assert: ends size equals: 1
 ]
 
 { #category : 'tests' }
