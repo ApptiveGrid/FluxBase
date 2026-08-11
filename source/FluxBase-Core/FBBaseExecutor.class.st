@@ -166,6 +166,12 @@ FBBaseExecutor >> isRunning [
 ]
 
 { #category : 'testing' }
+FBBaseExecutor >> isSubFlow [
+
+	^ false
+]
+
+{ #category : 'testing' }
 FBBaseExecutor >> isWaiting [
 	^ pending isEmpty & suspended notEmpty
 ]
