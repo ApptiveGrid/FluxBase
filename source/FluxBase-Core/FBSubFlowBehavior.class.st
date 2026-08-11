@@ -17,23 +17,23 @@ FBSubFlowBehavior >> buildChildScope [
 
 { #category : 'execution' }
 FBSubFlowBehavior >> execute [
-    | childScope childInstance isError resultName matchedTransition |
+    "do not run the sub flow here - only create its instance and push a frame for it
+    onto the calling instance's executor stack, exactly like FBParallelNodeBehavior
+    pushes a scope instead of looping over it. FBSubFlowExecutor then advances the
+    sub flow one node per step, which is what makes a sub flow call steppable from
+    the outside and keeps every step - including entering and leaving the sub flow -
+    within a single node's transaction. running the child to completion here would
+    make one step of the caller span the whole sub flow"
+    | childScope childInstance |
     childScope := self buildChildScope.
     childInstance := self node subFlow newInstance.
     childInstance scope: childScope.
-    activation flowInstance addSubFlowInstance: childInstance.
-    childInstance executeWith: self argument.
-    isError := childInstance state = #error.
-    resultName := isError ifTrue: [ #error ] ifFalse: [ #success ].
-    matchedTransition := self outgoing detect: [ :t | t resultName = resultName ] ifNone: [ nil ].
-    isError
-        ifTrue: [
-            matchedTransition ifNil: [ ^ FBError signal: 'sub flow ended in error and no #error transition is modelled' ].
-            activation done.
-            ^ self followTransition: matchedTransition ].
-    self value: (childInstance rootExecutor activationOf: childInstance flow end) argument.
-    activation done.
-    matchedTransition
-        ifNotNil: [ self followTransition: matchedTransition ]
-        ifNil: [ activation followAll: self outgoing ]
+    "initialize the child's executor and initial value without executing anything"
+    childInstance initialValue: self argument.
+    activation flowInstance
+        addSubFlowInstance: childInstance;
+        pushExecutor: (FBSubFlowExecutor new
+                 childInstance: childInstance;
+                 callerActivation: activation;
+                 yourself)
 ]

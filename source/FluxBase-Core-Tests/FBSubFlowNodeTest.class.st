@@ -5,6 +5,45 @@ Class {
 	#package : 'FluxBase-Core-Tests'
 }
 
+{ #category : 'private' }
+FBSubFlowNodeTest >> flowCalling: aFlow [
+    "a parent flow shaped start -> sub flow node calling aFlow -> end"
+    | start subNode |
+    start := FBStartEvent new.
+    subNode := start addOutgoingNode: FBSubFlowNode new.
+    subNode subFlow: aFlow.
+    subNode addOutgoingNode: FBEndEvent new.
+    ^ FBFlow new start: start
+]
+
+{ #category : 'private' }
+FBSubFlowNodeTest >> flowWaitingForever [
+    "a flow shaped start -> wait that never becomes true -> end"
+    | start wait |
+    start := FBStartEvent new.
+    wait := start addOutgoingNode: (FBPluggableWait new condition: [ :each | false ]; yourself).
+    wait addOutgoingNode: FBEndEvent new.
+    ^ FBFlow new start: start
+]
+
+{ #category : 'tests' }
+FBSubFlowNodeTest >> testEnteringSubFlowOnlyPushesAFrameAndRunsNoChildNode [
+    "the step that activates the sub flow node must not execute anything inside the
+    sub flow. if it did, that single step - and with it a single transaction - would
+    span two node executions"
+    | childStart childFlow instance |
+    childStart := FBStartEvent new.
+    childStart addOutgoingNode: FBEndEvent new.
+    childFlow := FBFlow new start: childStart.
+
+    instance := (self flowCalling: childFlow) newInstance.
+    instance initialValue: 1.
+    [ instance executor isSubFlow ] whileFalse: [ instance step ].
+
+    self assert: instance executor childInstance activations isEmpty.
+    self assert: instance state equals: #running
+]
+
 { #category : 'tests' }
 FBSubFlowNodeTest >> testParentTracksItsSubFlowInstancesButChildHasNoBackReference [
     | childStart childFlow parentStart subNode parentFlow instance childInstance |
@@ -24,6 +63,55 @@ FBSubFlowNodeTest >> testParentTracksItsSubFlowInstancesButChildHasNoBackReferen
     childInstance := instance subFlowInstances first.
     self assert: childInstance flow equals: childFlow.
     self deny: (childInstance class allInstVarNames includes: 'parent')
+]
+
+{ #category : 'tests' }
+FBSubFlowNodeTest >> testResumingWaitInsideSubFlowFinishesTheWholeFlow [
+    | childFlow parentFlow instance wait |
+    childFlow := self flowWaitingForever.
+    parentFlow := self flowCalling: childFlow.
+
+    instance := parentFlow newInstance.
+    instance executeWith: 1.
+    wait := instance suspended first.
+
+    instance resumeWaitingAt: wait with: 7.
+    instance execute.
+
+    self assert: instance atEnd.
+    self assert: instance state equals: #done.
+    self assert: (instance rootExecutor activationOf: parentFlow end) argument equals: 7
+]
+
+{ #category : 'tests' }
+FBSubFlowNodeTest >> testSubFlowAdvancesByExactlyOneChildNodePerStep [
+    "one step must never cross a node boundary, not even while the flow is inside a
+    sub flow: this is what lets a caller wrap every single step in its own
+    transaction. the sub flow's activation count therefore has to grow by exactly
+    one per step for as long as the frame is on the stack"
+    | childStart first childFlow instance childInstance counts |
+    childStart := FBStartEvent new.
+    first := childStart addOutgoingNode:
+                 ((FBPluggableTask named: 'first') block: [ :each | each value: each argument + 1 ]).
+    (first addOutgoingNode:
+         ((FBPluggableTask named: 'second') block: [ :each | each value: each argument + 1 ]))
+        addOutgoingNode: FBEndEvent new.
+    childFlow := FBFlow new start: childStart.
+
+    instance := (self flowCalling: childFlow) newInstance.
+    instance initialValue: 0.
+    [ instance executor isSubFlow ] whileFalse: [ instance step ].
+
+    counts := OrderedCollection new.
+    [ instance executor isSubFlow ] whileTrue: [
+        childInstance := instance executor childInstance.
+        instance step.
+        counts add: childInstance activations size ].
+
+    "start, first, second, end - one activation added per step, no step doing two"
+    self assert: counts equals: (1 to: 4) asOrderedCollection.
+    instance execute.
+    self assert: instance state equals: #done
 ]
 
 { #category : 'tests' }
@@ -119,4 +207,20 @@ FBSubFlowNodeTest >> testSubFlowRoutesToErrorTransitionWhenChildInstanceErrors [
     self assert: instance state equals: #done.
     self assert: (instance rootExecutor activationOf: onError) node equals: onError.
     self should: [ instance rootExecutor activationOf: onSuccess ] raise: Error
+]
+
+{ #category : 'tests' }
+FBSubFlowNodeTest >> testWaitInsideSubFlowLeavesCallingInstanceWaiting [
+    "a wait modelled inside a sub flow has to surface on the calling instance,
+    otherwise nothing outside can tell that the instance is blocked - or resume it"
+    | childFlow instance |
+    childFlow := self flowWaitingForever.
+
+    instance := (self flowCalling: childFlow) newInstance.
+    instance executeWith: 1.
+
+    self deny: instance atEnd.
+    self assert: instance state equals: #waiting.
+    self assert: instance suspended size equals: 1.
+    self assert: instance suspended first class equals: FBPluggableWait
 ]
