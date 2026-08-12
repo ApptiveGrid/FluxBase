@@ -6,32 +6,39 @@ can be bounded, completed or cancelled together. That is why I exist next to the
 token rather than inside it: a token and its parent chain describe one path, but
 they cannot enumerate the tokens that make up a region.
 
-	id			my own identity
-	parentId	the id of the scope I am nested in, i.e. my enclosing scope.
-			Nesting, not sequence - do not confuse this with FBToken>>parentId,
-			which points at another token and records which predecessor an
-			activation arrived through.
+	id			my own identity, for addressing me from outside
+	outer		the scope I am nested in, or nil if I am a root. Nesting, not
+			sequence - do not confuse this with FBToken>>parentId, which points
+			at another token and records which predecessor an activation
+			arrived through. The word is 'outer' rather than 'parent' because
+			that is the established vocabulary for scopes, and it keeps the two
+			relations apart at a glance.
 	ownerNode	the node that opened me
 	tokens		the tokens living in me
 	state		#active while I am alive
 	cancellationPolicy	how my tokens are to be cancelled together
 
+I hold my enclosing scope as a real reference, not as its id. Ids here are for
+being addressed from outside; inside the model we navigate by reference. That is
+also why #depth is computed by walking the outer chain instead of being stored:
+with only an id there was nothing to walk, so the depth had to be carried along
+as a second, derived field that could drift out of step.
+
 I am Phase-2 infrastructure and only partly consumed so far: tokens and
-cancellationPolicy have no readers yet (they are meant for the cancellation
-patterns WCP-19/20/25), and FBToken>>scopeId stays nil for as long as nothing
-creates scopes at runtime.
+cancellationPolicy have no readers yet - they are meant for the cancellation
+patterns WCP-19/20/25 - and FBToken>>scopeId is not populated, so a token does
+not yet know which of me it belongs to.
 "
 Class {
 	#name : 'FBScope',
 	#superclass : 'Object',
 	#instVars : [
 		'id',
-		'parentId',
+		'outer',
 		'ownerNode',
 		'tokens',
 		'state',
-		'cancellationPolicy',
-		'depth'
+		'cancellationPolicy'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -45,10 +52,9 @@ FBScope class >> defaultMaxDepth [
 
 { #category : 'instance creation' }
 FBScope class >> rootOwnedBy: aFBNode [
-    "Answer a new root scope (no parent), owned by aFBNode, depth 0."
+    "Answer a new root scope, owned by aFBNode. A root has no outer scope, so its depth is 0."
     ^ self new
         ownerNode: aFBNode;
-        depth: 0;
         yourself
 ]
 
@@ -64,22 +70,18 @@ FBScope >> cancellationPolicy: aSymbol [
 
 { #category : 'instance creation' }
 FBScope >> childOwnedBy: aFBNode [
-    "Answer a new child scope of the receiver, owned by aFBNode, one level deeper."
+    "Answer a new scope nested directly inside me, owned by aFBNode."
     ^ self class new
-        parentId: self id;
+        outer: self;
         ownerNode: aFBNode;
-        depth: self depth + 1;
         yourself
 ]
 
 { #category : 'accessing' }
 FBScope >> depth [
-    ^ depth ifNil: [ 0 ]
-]
-
-{ #category : 'accessing' }
-FBScope >> depth: anInteger [
-    depth := anInteger
+    "How deeply I am nested, counting a root as 0. Derived by walking #outer rather
+    than stored, so it can never disagree with the actual nesting."
+    ^ outer ifNil: [ 0 ] ifNotNil: [ :aScope | aScope depth + 1 ]
 ]
 
 { #category : 'as yet unclassified' }
@@ -95,6 +97,18 @@ FBScope >> initialize [
 	state := #active
 ]
 
+{ #category : 'accessing' }
+FBScope >> outer [
+	"The scope I am nested in, or nil if I am a root. Nesting, not sequence -
+	FBToken>>parentId is a different relation, see my class comment."
+	^ outer
+]
+
+{ #category : 'accessing' }
+FBScope >> outer: aFBScope [
+	outer := aFBScope
+]
+
 { #category : 'as yet unclassified' }
 FBScope >> ownerNode [
 	^ ownerNode
@@ -103,18 +117,6 @@ FBScope >> ownerNode [
 { #category : 'as yet unclassified' }
 FBScope >> ownerNode: aFBNode [
 	ownerNode := aFBNode
-]
-
-{ #category : 'as yet unclassified' }
-FBScope >> parentId [
-	"The id of the scope I am nested in. Nesting, not sequence - FBToken>>parentId
-	is a different relation, see my class comment."
-	^ parentId
-]
-
-{ #category : 'as yet unclassified' }
-FBScope >> parentId: anObject [
-	parentId := anObject
 ]
 
 { #category : 'as yet unclassified' }

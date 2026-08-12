@@ -22,11 +22,11 @@ to the token it came from.
 	branchId	unique per branch of a split
 	scopeId		the FBScope I live in
 
-Do not confuse my parentId with FBScope>>parentId. Mine points at another token
-and records sequence (who came before me); the scope's points at another scope
-and records nesting (what encloses me). One token can have several children - an
+My parentId and FBScope>>outer are deliberately named apart because they are
+different relations: mine records sequence (who came before me), the scope's
+records nesting (what encloses me). One token can have several children - an
 AND-split creates one per branch - so the token graph is a tree, and every token
-has exactly one parent.
+has exactly one parent, which is why 'parent' fits here and 'outer' fits there.
 
 Not all of me is wired up. Only splitId and parentId currently drive decisions.
 branchId and scopeId are inherited and logged but never consulted, scopeId stays
@@ -98,7 +98,7 @@ FBToken >> node: aFBNode [
 { #category : 'as yet unclassified' }
 FBToken >> parentId [
 	"The id of the token I was created from, set by FBBaseActivation>>childToken.
-	Sequence, not nesting - FBScope>>parentId is a different relation, see my class comment."
+	Sequence, not nesting - FBScope>>outer is a different relation, see my class comment."
 	^ parentId
 ]
 
