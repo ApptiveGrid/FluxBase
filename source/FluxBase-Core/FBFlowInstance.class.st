@@ -61,17 +61,28 @@ FBFlowInstance >> activationClass [
 ]
 
 { #category : 'accessing' }
-FBFlowInstance >> activeFrames [
-    "this instance followed by the chain of sub flow instances currently executing
-    inside it, outermost first. sub flow calls are synchronous, so only the last
-    frame of this chain is ever advancing and the chain is the path a step takes
-    down into the nested flows. its length is bounded by FBSubFlowNode>>maxDepth"
-    | frames current |
-    frames := OrderedCollection with: self.
+FBFlowInstance >> activeExecutors [
+    "every executor that can currently hold a waiting node: this instance's own plus
+    those of the flow instances executing inside it. the single traversal both
+    #suspended and #resumeWaitingAt:with: work off, kept in instance order so the
+    outermost instance is searched first"
+    ^ self activeFlowInstances flatCollect: [ :each | each executors ]
+]
+
+{ #category : 'accessing' }
+FBFlowInstance >> activeFlowInstances [
+    "this instance followed by the flow instances currently executing inside it,
+    outermost first. each sub flow call pushes a FBSubFlowExecutor frame onto the
+    caller's executor stack, and that frame's child instance is the next link. sub
+    flow calls are synchronous, so only the last instance of this chain is ever
+    advancing and the chain is the path a step takes down into the nested flows.
+    its length is bounded by FBSubFlowNode>>maxDepth"
+    | instances current |
+    instances := OrderedCollection with: self.
     current := self.
     [ current := current activeSubFlowInstance. current notNil ] whileTrue: [
-        frames add: current ].
-    ^ frames
+        instances add: current ].
+    ^ instances
 ]
 
 { #category : 'accessing' }
@@ -347,20 +358,16 @@ FBFlowInstance >> registerExpectedBranchCount: aCount forSplitId: aSplitId [
 
 { #category : 'executing' }
 FBFlowInstance >> resumeWaitingAt: aNode with: aValue [
-	"look for the waiting node in this instance's own executors first and then in the
-	sub flow frame currently executing inside it, so that a wait modelled inside a sub
-	flow can be resumed through the outermost instance. resuming is addressed by node
-	identity alone, so a node waiting in more than one frame of a recursive sub flow
-	call resolves to the outermost frame - the same ambiguity the node already has
-	across the iterations of a parallel scope"
+	"look for the waiting node in this instance's own executors and in those of the
+	flow instances executing inside it, so that a wait modelled inside a sub flow can
+	be resumed through the outermost instance. resuming is addressed by node identity
+	alone, so a node waiting in more than one instance of a recursive sub flow call
+	resolves to the outermost one - the same ambiguity the node already has across the
+	iterations of a parallel scope"
 	| holder activation |
-	holder := self executors
+	holder := self activeExecutors
 		detect: [ :each | each suspended includes: aNode ]
-		ifNone: [ nil ].
-	holder ifNil: [
-		^ self activeSubFlowInstance
-			ifNil: [ FBNodeNotWaiting signal: 'node is not currently waiting' ]
-			ifNotNil: [ :child | child resumeWaitingAt: aNode with: aValue ] ].
+		ifNone: [ ^ FBNodeNotWaiting signal: 'node is not currently waiting' ].
 	activation := holder activationOf: aNode.
 	holder suspended remove: aNode.
 	activation value: aValue.
@@ -411,12 +418,11 @@ FBFlowInstance >> subFlowInstances [
 
 { #category : 'accessing' }
 FBFlowInstance >> suspended [
-	"every node currently waiting in this instance or in a sub flow frame executing
+	"every node currently waiting in this instance or in a flow instance executing
 	inside it. a caller asking what blocks this instance must see the wait even when
 	it is modelled inside a sub flow, since that is what #state reports as #waiting"
 
-	^ self activeFrames flatCollect: [ :instance |
-		  instance executors flatCollect: [ :each | each suspended ] ]
+	^ self activeExecutors flatCollect: [ :each | each suspended ]
 ]
 
 { #category : 'as yet unclassified' }
