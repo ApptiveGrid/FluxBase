@@ -29,8 +29,8 @@ FBBaseActivation >> addEvent: aFBFlowEvent [
 { #category : 'as yet unclassified' }
 FBBaseActivation >> childToken [
 	^ FBToken new
-		parentId: self token id;
-		scopeId: self token scopeId;
+		parent: self token;
+		scope: self token scope;
 		splitId: self token splitId;
 		branchId: self token branchId;
 		yourself
@@ -125,7 +125,7 @@ FBBaseActivation >> initialize [
 	id := FBIdGenerator current newId.
 	timestamp := DateAndTime now.
 	state := #created.
-	token := FBToken new
+	token := FBToken new activation: self; yourself
 ]
 
 { #category : 'accessing' }
@@ -169,12 +169,37 @@ FBBaseActivation >> token [
 	"Content-sicherer Getter: bereits persistierte, alte Activations aus der Zeit vor der token-Ivar haben token = nil.
 	Fuer diese wird bei jedem Lesen ein frischer Default zurueckgegeben, OHNE ihn in die Ivar zurueckzuschreiben -
 	sonst wuerde ein reiner Lesezugriff die Activation als geaendert markieren (Modification on Read, siehe FBFlowInstance>>metadata)."
-	^ token ifNil: [ FBToken new ]
+	^ token ifNil: [ FBToken new activation: self; yourself ]
 ]
 
 { #category : 'as yet unclassified' }
 FBBaseActivation >> token: aFBToken [
-	token := aFBToken
+	token := aFBToken.
+	aFBToken ifNotNil: [ aFBToken activation: self ]
+]
+
+{ #category : 'accessing' }
+FBBaseActivation >> sourceNode [
+	"The node I arrived from, i.e. which of my node's incoming transitions was actually
+	taken to produce me. Not derivable from the graph - my node may have several
+	incoming transitions, and a loop passes the same one repeatedly - so it comes from
+	my token's parent, which is the token of the activation that spawned me."
+	^ self token parent
+		ifNotNil: [ :parentToken | parentToken node ]
+		ifNil: [ self legacySourceNode ]
+]
+
+{ #category : 'accessing' }
+FBBaseActivation >> legacySourceNode [
+	"Tokens persisted before FBToken held a real #parent reference only carry the
+	parent's id, so resolve it the way FBJoinBehavior used to: search this instance's
+	activations for the one owning that token. Remove together with FBToken>>parentId
+	once no such tokens are left in any store."
+	| parentTokenId |
+	parentTokenId := self token parentId ifNil: [ ^ nil ].
+	^ (self instance activations
+		detect: [ :each | each token id = parentTokenId ]
+		ifNone: [ nil ]) ifNotNil: [ :each | each node ]
 ]
 
 { #category : 'as yet unclassified' }

@@ -7,18 +7,74 @@ Class {
 
 { #category : 'as yet unclassified' }
 FBActivationTest >> testChildTokenCarriesParentageAndScopeSplitBranchForward [
-	| activation child |
+	| activation child scope |
+	scope := FBScope new.
 	activation := FBActivation new.
 	activation token
-		scopeId: 'scope-1';
+		scope: scope;
 		splitId: 'split-1';
 		branchId: 'branch-1'.
 	child := activation childToken.
-	self assert: child parentId equals: activation token id.
-	self assert: child scopeId equals: 'scope-1'.
+	self assert: child parent equals: activation token.
+	self assert: child scope equals: scope.
 	self assert: child splitId equals: 'split-1'.
 	self assert: child branchId equals: 'branch-1'.
 	self deny: child id equals: activation token id
+]
+
+{ #category : 'as yet unclassified' }
+FBActivationTest >> testSourceNodeAnswersTheNodeTheActivationArrivedFrom [
+	| start split a b join end flow instance arrivals |
+	start := FBStartEvent new.
+	split := FBAndSplit named: 'split'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	join := FBAndJoin named: 'join'.
+	end := FBEndEvent new.
+	start --> split.
+	split --> a --> join.
+	split --> b --> join.
+	join --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance execute.
+	arrivals := (instance activations select: [ :each | each node == join ])
+		collect: [ :each | each sourceNode ].
+	self assert: arrivals asSet equals: (Set with: a with: b)
+]
+
+{ #category : 'as yet unclassified' }
+FBActivationTest >> testSourceNodeFallsBackToTheLegacyParentIdWhenThereIsNoParentReference [
+	"Tokens persisted before FBToken>>parent became a real reference carry only the
+	parent's id. Rebuild that state directly - the setters for it are gone on purpose -
+	and check the old resolution path still answers the same node. Delete this together
+	with FBToken>>parentId once no such tokens are left in any store."
+	| start split a b join end flow instance arrival parentToken |
+	start := FBStartEvent new.
+	split := FBAndSplit named: 'split'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	join := FBAndJoin named: 'join'.
+	end := FBEndEvent new.
+	start --> split.
+	split --> a --> join.
+	split --> b --> join.
+	join --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance execute.
+	arrival := (instance activations detect: [ :each | each node == join ]).
+	parentToken := arrival token parent.
+	arrival token
+		instVarNamed: 'parent' put: nil;
+		instVarNamed: 'parentId' put: parentToken id.
+	self assert: arrival token parent isNil.
+	self assert: arrival sourceNode equals: parentToken node
+]
+
+{ #category : 'as yet unclassified' }
+FBActivationTest >> testSourceNodeIsNilWhenThereIsNeitherAParentNorALegacyId [
+	self assert: FBActivation new sourceNode isNil
 ]
 
 { #category : 'tests' }
