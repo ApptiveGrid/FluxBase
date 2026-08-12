@@ -429,7 +429,20 @@ FBFlowInstance >> rootExecutor [
 
 { #category : 'accessing' }
 FBFlowInstance >> scope [
-    ^ scope ifNil: [ scope := FBScope rootOwnedBy: nil ]
+    "my root scope, or nil while nothing has needed one - a flow without a sub flow call
+    never opens a scope at all.
+
+    deliberately a plain reader. it used to create the root scope on first read and
+    assign it, which is a write on read: on an instance materialized in a read-only
+    transaction that marks it dirty and signals SoilWriteOnReadOnlyTransaction, which
+    left a Zinc worker hanging on an unhandled error and made
+    AGExternalFlowHookTest>>testPostToExternalHook time out without ever naming a cause.
+    FBSubFlowBehavior>>buildChildScope creates it instead, where it is first needed and
+    where a write transaction is guaranteed. Same hazard, same resolution as
+    FBFlowInstance>>metadata and FBBaseActivation>>token, whose comment names it
+    'Modification on Read'"
+
+    ^ scope
 ]
 
 { #category : 'accessing' }

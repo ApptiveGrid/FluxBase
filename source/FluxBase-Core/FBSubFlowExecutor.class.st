@@ -122,7 +122,8 @@ FBSubFlowExecutor >> isWaiting [
 
 { #category : 'printing' }
 FBSubFlowExecutor >> printOn: aStream [
-    aStream << 'sub flow frame depth=' << childInstance scope depth asString
+    aStream << 'sub flow frame depth='
+        << (childInstance scope ifNil: [ '?' ] ifNotNil: [ :each | each depth asString ])
 ]
 
 { #category : 'services' }
