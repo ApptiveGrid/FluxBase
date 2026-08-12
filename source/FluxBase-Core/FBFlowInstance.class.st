@@ -365,12 +365,11 @@ FBFlowInstance >> nextTransition [
 
 { #category : 'accessing' }
 FBFlowInstance >> parallelExecutorFrom: aNode ifAbsent: aBlock [
+	"#executors is the live stack, so this can only ever answer a scope that is currently
+	open - never a finished executor from an earlier iteration of an enclosing parallel
+	scope, which is what the stored collection used to allow"
 
-	"#executors is the live stack, so this can only ever answer a scope that is
-	currently open - never a finished executor from an earlier iteration of an
-	enclosing parallel scope, which is what the stored collection used to allow"
-
-	^ self executors detect: [ :each | each isParallel and: [each node = aNode] ] ifNone: aBlock
+	^ self executors detect: [ :each | each isParallel and: [ each node = aNode ] ] ifNone: aBlock
 ]
 
 { #category : 'accessing' }

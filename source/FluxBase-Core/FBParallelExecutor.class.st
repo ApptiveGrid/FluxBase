@@ -151,19 +151,22 @@ FBParallelExecutor >> node: aFBParallelNode [
 FBParallelExecutor >> outputFor: anActivation [
 	"two distinct callers reach this method with two distinct meanings:
 	- a regular task's activation, created inside this executor's own scope
-	  (anActivation node ~= self node): its own #value is one slot per
-	  *this* executor's iteration, so slicing anActivation value by
-	  self index is correct - this is the original, unchanged behavior.
-	- this same parallel node's own self-activation (anActivation node ==
-	  self node), reached via FBParallelNode>>outputFor:'s
-	  #parallelExecutorFrom: lookup, which guarantees self is the node's
-	  own freshly-pushed executor: here anActivation's #value is just a
-	  display-only hack (see e.g. AGParallelNodeBehavior>>execute) that,
-	  when this node is itself nested inside an outer parallel scope, has
-	  one slot per *outer* iteration rather than per this executor's own -
-	  so it must be ignored in favor of this executor's own list/index,
-	  the same source #lastValueOf: uses (the 'parallel node in parallel
-	  node' bug)"
+	  (anActivation node ~= self node): its #value holds one slot per iteration of this
+	  scope, so it has to be sliced with this executor's index.
+	- this same parallel node's own self-activation (anActivation node == self node):
+	  #list and #index are the loop this node is running, so they are the authoritative
+	  answer - and the only one that tracks the iteration. that matters beyond display:
+	  a parallel node's #output is the loop variable scripts read, so a loop body's
+	  branch conditions and output scripts depend on it advancing (see
+	  AGParallelNodeTest>>testExecuteWithCondition and #testExecuteWithOutputScript).
+	  #value cannot serve here, since for a node nested in an enclosing parallel scope it
+	  holds one slot per *outer* iteration.
+
+	this is reached only while the scope is open, because FBFlowInstance>>executors is the
+	live stack - which is what stopped #parallelExecutorFrom:ifAbsent: from handing out a
+	finished executor of an earlier outer iteration and freezing the output there
+	(FBFlowTest>>testNestedParallelNodeInnerForkOutputFollowsRunningIteration)"
+
 	self node == anActivation node ifTrue: [
 		(self activationOf: node) isDone ifTrue: [ ^ list first ].
 		^ list at: index ].

@@ -35,6 +35,15 @@ FBParallelActivation >> done [
 		 ]
 ]
 
+{ #category : 'accessing' }
+FBParallelActivation >> currentValue [
+	"the counterpart of #value:, which writes values at: executor index while #value
+	answers the whole per-iteration array - executor being this activation's *creating*
+	executor, i.e. the enclosing scope, exactly as for #argument"
+
+	^ values at: executor index
+]
+
 { #category : 'initialization' }
 FBParallelActivation >> initializeValues: anInteger [
 
@@ -74,23 +83,19 @@ FBParallelActivation >> metadataSchema [
 
 { #category : 'accessing' }
 FBParallelActivation >> output [
-	"executor is this activation's *creating* executor - correct to ask
-	directly for a plain task's output (it was created inside that
-	executor's own scope, one slot per that scope's iteration). but when
-	this activation is a parallel node's own self-activation and that node
-	is itself nested inside an outer parallel scope, executor is the
-	*outer* scope that created it, not the freshly-pushed inner executor
-	that actually tracks this node's own iteration - so it must be
-	resolved through the node instead, the same way FBBaseActivation>>output
-	does, to reach the right (inner) executor via #parallelExecutorFrom:
-	(see FBParallelNode>>outputFor: and the 'parallel node in parallel
-	node' bug)"
+	"executor is this activation's *creating* executor - correct to ask directly for a
+	plain task's output, which was created inside that executor's own scope and has one
+	slot per that scope's iteration. the two node kinds that are not such a task have to
+	be answered without it.
+
+	a parallel node's own self-activation: asking the creating executor would ask the
+	*enclosing* scope, not the one this node itself opened. the node resolves it against
+	the scope it opened itself instead (see FBParallelNode>>outputFor:).
+
+	a join node's own activation: by the time it is done, #value (aliased to arguments by
+	FBParallelJoinNodeBehavior>>execute) already *is* the aggregated result, so it needs
+	no per-iteration resolution regardless of nesting"
 	(self node isKindOf: FBParallelNode) ifTrue: [ ^ self node outputFor: self ].
-	"a join node's own activation is not a parallel/split node, so it never
-	goes through FBParallelNode>>outputFor:'s #parallelExecutorFrom: lookup
-	above - by the time it's done, #value (values, aliased to arguments by
-	FBParallelJoinNodeBehavior>>execute) already *is* the aggregated result,
-	needing no further executor-based resolution regardless of nesting"
 	(self node isKindOf: FBParallelJoinNode) ifTrue: [ ^ self value ].
 	^ executor outputFor: self
 ]
