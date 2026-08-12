@@ -5,6 +5,21 @@ Class {
 	#package : 'FluxBase-Core-Tests'
 }
 
+{ #category : 'private' }
+FBFlowTest >> liveScopeFor: aNode in: anInstance [
+	"the executor of aNode's currently open parallel scope, or nil when none is open.
+	found by walking the live stack from the instance's current executor up through
+	#suspendedExecutor - the same links FBBaseExecutor>>rootExecutor walks.
+	deliberately not resolved via #executors or #parallelExecutorFrom:ifAbsent:, so a
+	test using this does not depend on the lookup it is checking"
+	| current |
+	current := anInstance executor.
+	[ current notNil ] whileTrue: [
+		(current isParallel and: [ current node = aNode ]) ifTrue: [ ^ current ].
+		current := current suspendedExecutor ].
+	^ nil
+]
+
 { #category : 'tests' }
 FBFlowTest >> testAllNodes [
 	| flow |
@@ -274,7 +289,9 @@ FBFlowTest >> testParallelNodeAsLastNodeStops [
 	instance executeWith: { 1. 2. 3 }.
 	self assert: instance atEnd.
 	self assert: instance state equals: #done.
-	"no parallel executor should have been initialized as there was no outgoing node to fan out to"
+	"the stack is fully unwound - the root executor and nothing else. #executors is the
+	live stack, so this no longer distinguishes 'never pushed' from 'pushed and popped';
+	it does still pin down the actual bug, which was an executor left current forever"
 	self assert: instance executors size equals: 1.
 ]
 
@@ -359,6 +376,39 @@ FBFlowTest >> testNestedParallelNodeJoinedOutput [
 		((instance activations select: [ :each | each node = outerJoin ])
 			collect: [ :each | each output ])
 		equals: (OrderedCollection with: (Array with: #(1 2) with: #(3 4 5) with: #(6)))
+]
+
+{ #category : 'tests' }
+FBFlowTest >> testNestedParallelNodeInnerForkOutputFollowsRunningIteration [
+	"regression test: the inner fork's #output froze on the first outer iteration and
+	never moved again. a parallel node nested in a parallel scope gets one executor per
+	outer iteration, all answering the same #node, and they all accumulated in
+	FBFlowInstance>>executors because #popExecutor: never removed anything - so
+	#parallelExecutorFrom:ifAbsent: picked the first by #detect: and
+	FBParallelExecutor>>outputFor: read #list/#index off that long-finished executor.
+	While the flow was processing #(3 4 5) and then #(6), #output kept answering 2.
+	Only observable on a *running* instance: once everything has popped, the lookup
+	finds nothing and the #ifAbsent: fallback answers from the activation itself"
+	| flow instance innerFork |
+	flow := FBFlow nestedParallelFlowJoined.
+	innerFork := flow nodes detect: [ :each | each name = 'inner fork' ].
+	instance := flow newInstance.
+	instance initialValue: { #(1 2). #(3 4 5). #(6) }.
+
+	[ instance executor hasPending ] whileTrue: [
+		| liveScope activation processed |
+		instance step.
+		liveScope := self liveScopeFor: innerFork in: instance.
+		activation := instance activations
+			              detect: [ :each | each node = innerFork ]
+			              ifNone: [ nil ].
+		(liveScope notNil and: [ activation notNil ]) ifTrue: [
+			processed := liveScope instVarNamed: #list.
+			self
+				assert: (processed includes: activation output)
+				description: 'inner fork output ' , activation output printString
+					, ' does not belong to the iteration being processed '
+					, processed printString ] ]
 ]
 
 { #category : 'tests' }
