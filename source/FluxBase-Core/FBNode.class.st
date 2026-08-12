@@ -169,6 +169,22 @@ FBNode >> detach [
 	outgoing copy do: #detach.
 ]
 
+{ #category : 'execution' }
+FBNode >> effectiveOutgoingFor: anActivation [
+	"the transitions to actually follow once this node's activation is done:
+	its own #outgoing if it has any, otherwise (unless this node is itself
+	already a flow terminal) a synthesized, ad-hoc transition to an implicit
+	join/end node - never persisted, never wired into any real node's own
+	#outgoing/#incoming, and never added to the flow definition - resolved
+	through the current executor so a node reached from inside a parallel
+	scope implicitly joins that scope, and a node reached at the outermost
+	level implicitly reaches the flow's end. see FBBaseExecutor>>impliedTransitionFrom:"
+
+	outgoing isEmpty ifFalse: [ ^ outgoing ].
+	self isFlowTerminal ifTrue: [ ^ #() ].
+	^ Array with: (anActivation instance executor impliedTransitionFrom: self)
+]
+
 { #category : 'as yet unclassified' }
 FBNode >> findEnd [
 	(self isKindOf: FBEndEvent) ifTrue: [ ^ self ]. 
@@ -200,31 +216,6 @@ FBNode >> id [
 	^ id
 ]
 
-{ #category : 'execution' }
-FBNode >> effectiveOutgoingFor: anActivation [
-	"the transitions to actually follow once this node's activation is done:
-	its own #outgoing if it has any, otherwise (unless this node is itself
-	already a flow terminal) a synthesized, ad-hoc transition to an implicit
-	join/end node - never persisted, never wired into any real node's own
-	#outgoing/#incoming, and never added to the flow definition - resolved
-	through the current executor so a node reached from inside a parallel
-	scope implicitly joins that scope, and a node reached at the outermost
-	level implicitly reaches the flow's end. see FBBaseExecutor>>impliedTransitionFrom:"
-
-	outgoing isEmpty ifFalse: [ ^ outgoing ].
-	self isFlowTerminal ifTrue: [ ^ #() ].
-	^ Array with: (anActivation instance executor impliedTransitionFrom: self)
-]
-
-{ #category : 'testing' }
-FBNode >> isFlowTerminal [
-	"true for a node that already represents 'nothing more happens after
-	this' (e.g. FBEndEvent) - #effectiveOutgoingFor: must not synthesize an
-	implicit continuation past one of these"
-
-	^ false
-]
-
 { #category : 'accessing' }
 FBNode >> incoming [
 
@@ -243,6 +234,15 @@ FBNode >> initialize [
 	id := FBIdGenerator current newId.
 	incoming := OrderedCollection new.
 	outgoing := OrderedCollection new
+]
+
+{ #category : 'testing' }
+FBNode >> isFlowTerminal [
+	"true for a node that already represents 'nothing more happens after
+	this' (e.g. FBEndEvent) - #effectiveOutgoingFor: must not synthesize an
+	implicit continuation past one of these"
+
+	^ false
 ]
 
 { #category : 'accessing' }
@@ -376,6 +376,17 @@ FBNode >> removeIncoming: aFBTransition [
 { #category : 'removing' }
 FBNode >> removeOutgoing: aFBTransition [ 
 	outgoing remove: aFBTransition 
+]
+
+{ #category : 'as yet unclassified' }
+FBNode >> resultTransition: aSymbol [
+    "convenience analogous to #when: -- builds an unattached transition to self,
+    tagged with resultName, for wiring result-specific outgoing branches
+    (e.g. from a FBSubFlowNode). use as: aNode --> (target resultTransition: #error)"
+    ^ self transitionClass new
+        target: self;
+        resultName: aSymbol;
+        yourself
 ]
 
 { #category : 'initialization' }

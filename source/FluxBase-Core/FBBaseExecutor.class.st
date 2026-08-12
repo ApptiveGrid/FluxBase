@@ -62,6 +62,16 @@ FBBaseExecutor >> addWaiting: aNode [
 	suspended add: aNode
 ]
 
+{ #category : 'services' }
+FBBaseExecutor >> buildImpliedContinuationNode [
+	"the node a dead-ending activation implicitly continues to when this
+	executor is the current one - a plain flow end by default (used by
+	FBFlowExecutor, the root/outermost case); FBParallelExecutor overrides
+	this to answer an implicit join for its own scope instead"
+
+	^ FBEndEvent new
+]
+
 { #category : 'accessing' }
 FBBaseExecutor >> firstPending [
 	^ pending first
@@ -92,49 +102,6 @@ FBBaseExecutor >> hasErrors [
 { #category : 'testing' }
 FBBaseExecutor >> hasPending [
 	^ pending notEmpty 
-]
-
-{ #category : 'initialization' }
-FBBaseExecutor >> initialize [ 
-	super initialize.
-	pending := OrderedCollection new.
-	suspended := OrderedCollection new
-]
-
-{ #category : 'testing' }
-FBBaseExecutor >> isCreated [
-	^ (pending size = 1) and: [ pending first transition = flowInstance start ]
-]
-
-{ #category : 'accessing' }
-FBBaseExecutor >> isDone [
-	^ pending isEmpty & suspended isEmpty
-]
-
-{ #category : 'testing' }
-FBBaseExecutor >> isParallel [
-
-	^ false
-]
-
-{ #category : 'testing' }
-FBBaseExecutor >> isRunning [
-	^ pending notEmpty
-]
-
-{ #category : 'testing' }
-FBBaseExecutor >> isWaiting [
-	^ pending isEmpty & suspended notEmpty
-]
-
-{ #category : 'services' }
-FBBaseExecutor >> buildImpliedContinuationNode [
-	"the node a dead-ending activation implicitly continues to when this
-	executor is the current one - a plain flow end by default (used by
-	FBFlowExecutor, the root/outermost case); FBParallelExecutor overrides
-	this to answer an implicit join for its own scope instead"
-
-	^ FBEndEvent new
 ]
 
 { #category : 'accessing' }
@@ -170,6 +137,45 @@ FBBaseExecutor >> impliedTransitionFrom: aFBNode [
 	^ self impliedTransition source: aFBNode; yourself
 ]
 
+{ #category : 'initialization' }
+FBBaseExecutor >> initialize [ 
+	super initialize.
+	pending := OrderedCollection new.
+	suspended := OrderedCollection new
+]
+
+{ #category : 'testing' }
+FBBaseExecutor >> isCreated [
+	^ (pending size = 1) and: [ pending first transition = flowInstance start ]
+]
+
+{ #category : 'accessing' }
+FBBaseExecutor >> isDone [
+	^ pending isEmpty & suspended isEmpty
+]
+
+{ #category : 'testing' }
+FBBaseExecutor >> isParallel [
+
+	^ false
+]
+
+{ #category : 'testing' }
+FBBaseExecutor >> isRunning [
+	^ pending notEmpty
+]
+
+{ #category : 'testing' }
+FBBaseExecutor >> isSubFlow [
+
+	^ false
+]
+
+{ #category : 'testing' }
+FBBaseExecutor >> isWaiting [
+	^ pending isEmpty & suspended notEmpty
+]
+
 { #category : 'accessing' }
 FBBaseExecutor >> lastValueOf: aFBNode [
 	^ (self activationOf: aFBNode) value.
@@ -178,6 +184,23 @@ FBBaseExecutor >> lastValueOf: aFBNode [
 { #category : 'accessing' }
 FBBaseExecutor >> pending [
 	^ pending
+]
+
+{ #category : 'accessing' }
+FBBaseExecutor >> popThenResume: aBlock [
+	"pop this executor off the flow instance's executor stack, run aBlock while the
+	parent executor is already current, and only then notify the parent to resume.
+	callers that need to enqueue a continuation transition as part of popping (e.g.
+	FBParallelJoinNodeBehavior) must do so from aBlock: if it happened after the
+	parent's resumeAfter: instead, a parent parallel executor would already have
+	eagerly advanced to its next iteration (see FBParallelExecutor>>continue), and
+	the continuation would race against - and lose to - that next iteration"
+	| parent |
+	parent := suspendedExecutor.
+	flowInstance popExecutor: parent.
+	aBlock value.
+	parent ifNotNil: [
+		parent resumeAfter: self ]
 ]
 
 { #category : 'as yet unclassified' }
@@ -202,23 +225,6 @@ FBBaseExecutor >> scheduleStart [
 { #category : 'accessing' }
 FBBaseExecutor >> stop [
 	self popThenResume: [ ]
-]
-
-{ #category : 'accessing' }
-FBBaseExecutor >> popThenResume: aBlock [
-	"pop this executor off the flow instance's executor stack, run aBlock while the
-	parent executor is already current, and only then notify the parent to resume.
-	callers that need to enqueue a continuation transition as part of popping (e.g.
-	FBParallelJoinNodeBehavior) must do so from aBlock: if it happened after the
-	parent's resumeAfter: instead, a parent parallel executor would already have
-	eagerly advanced to its next iteration (see FBParallelExecutor>>continue), and
-	the continuation would race against - and lose to - that next iteration"
-	| parent |
-	parent := suspendedExecutor.
-	flowInstance popExecutor: parent.
-	aBlock value.
-	parent ifNotNil: [
-		parent resumeAfter: self ]
 ]
 
 { #category : 'as yet unclassified' }

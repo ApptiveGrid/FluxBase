@@ -78,16 +78,19 @@ FBFlow class >> gatewayedFlow [
 ]
 
 { #category : 'tests' }
-FBFlow class >> parallelFlowJoined [ 
+FBFlow class >> nestedParallelFlowImplicit [
+	"same shape as #nestedParallelFlowJoined, but without any explicit join
+	or end node at all - 'task' just dead-ends. Used to regression-test that
+	FBNode>>effectiveOutgoingFor: correctly synthesizes an implicit join per
+	scope (and, eventually, an implicit flow end) instead of the flow just
+	silently stopping partway"
 	<sampleInstance>
-	| start end parallel p1 p2 join |
+	| start outerFork innerFork task |
 	start := FBStartEvent new.
-	parallel := start addOutgoingNode: (FBParallelNode named: 'parallel fork').
-	p1 := parallel addOutgoingNode: (FBTestTask named: 'p1 task').
-	p2 := p1 addOutgoingNode: (FBTestTask named: 'p2 task').
-	join := p2 addOutgoingNode: (FBParallelJoinNode named: 'join').
-	end := join addOutgoingNode: FBEndEvent new.
-	
+	outerFork := start addOutgoingNode: (FBParallelNode named: 'outer fork').
+	innerFork := outerFork addOutgoingNode: (FBParallelNode named: 'inner fork').
+	task := innerFork addOutgoingNode: ((FBPluggableTask named: 'task') block: [ :activation | activation value: activation argument ]).
+
 	^ FBFlow new start: start
 ]
 
@@ -112,31 +115,16 @@ FBFlow class >> nestedParallelFlowJoined [
 ]
 
 { #category : 'tests' }
-FBFlow class >> nestedParallelFlowImplicit [
-	"same shape as #nestedParallelFlowJoined, but without any explicit join
-	or end node at all - 'task' just dead-ends. Used to regression-test that
-	FBNode>>effectiveOutgoingFor: correctly synthesizes an implicit join per
-	scope (and, eventually, an implicit flow end) instead of the flow just
-	silently stopping partway"
+FBFlow class >> parallelFlowJoined [ 
 	<sampleInstance>
-	| start outerFork innerFork task |
+	| start end parallel p1 p2 join |
 	start := FBStartEvent new.
-	outerFork := start addOutgoingNode: (FBParallelNode named: 'outer fork').
-	innerFork := outerFork addOutgoingNode: (FBParallelNode named: 'inner fork').
-	task := innerFork addOutgoingNode: ((FBPluggableTask named: 'task') block: [ :activation | activation value: activation argument ]).
-
-	^ FBFlow new start: start
-]
-
-{ #category : 'tests' }
-FBFlow class >> parallelFlowOpen [
-	<sampleInstance>
-	| start end parallel p1 p2 |
-	start := FBStartEvent new.
-	parallel := start addOutgoingNode: (FBParallelNode named: 'parallel task').
+	parallel := start addOutgoingNode: (FBParallelNode named: 'parallel fork').
 	p1 := parallel addOutgoingNode: (FBTestTask named: 'p1 task').
 	p2 := p1 addOutgoingNode: (FBTestTask named: 'p2 task').
-	end := p2 addOutgoingNode: FBEndEvent new.
+	join := p2 addOutgoingNode: (FBParallelJoinNode named: 'join').
+	end := join addOutgoingNode: FBEndEvent new.
+	
 	^ FBFlow new start: start
 ]
 
@@ -149,6 +137,18 @@ FBFlow class >> parallelFlowNoOutgoing [
 	| start |
 	start := FBStartEvent new.
 	start addOutgoingNode: (FBParallelNode named: 'parallel task').
+	^ FBFlow new start: start
+]
+
+{ #category : 'tests' }
+FBFlow class >> parallelFlowOpen [
+	<sampleInstance>
+	| start end parallel p1 p2 |
+	start := FBStartEvent new.
+	parallel := start addOutgoingNode: (FBParallelNode named: 'parallel task').
+	p1 := parallel addOutgoingNode: (FBTestTask named: 'p1 task').
+	p2 := p1 addOutgoingNode: (FBTestTask named: 'p2 task').
+	end := p2 addOutgoingNode: FBEndEvent new.
 	^ FBFlow new start: start
 ]
 

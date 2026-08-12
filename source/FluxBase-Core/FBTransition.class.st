@@ -5,7 +5,8 @@ Class {
 		'id',
 		'source',
 		'target',
-		'condition'
+		'condition',
+		'resultName'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -87,6 +88,16 @@ FBTransition >> printOn: aStream [
 	source printOn: aStream.
 	aStream << ' --> '.
 	target printOn: aStream
+]
+
+{ #category : 'accessing' }
+FBTransition >> resultName [
+    ^ resultName
+]
+
+{ #category : 'accessing' }
+FBTransition >> resultName: aSymbol [
+    resultName := aSymbol
 ]
 
 { #category : 'accessing' }
