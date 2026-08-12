@@ -6,6 +6,24 @@ Class {
 }
 
 { #category : 'tests' }
+FBFlowInstanceTest >> testInnermostWaitingExecutorIsTheCurrentOneWhenItWaitsItself [
+	| flowInstance |
+	flowInstance := FBFlow simpleWaitFlow newInstance.
+	flowInstance executeWith: 2.
+	self assert: flowInstance state equals: #waiting.
+	self assert: flowInstance innermostWaitingExecutor identicalTo: flowInstance executor
+]
+
+{ #category : 'tests' }
+FBFlowInstanceTest >> testInnermostWaitingExecutorIsNilWhenNothingWaits [
+	| flowInstance |
+	flowInstance := FBFlow simpleFlow newInstance.
+	flowInstance executeWith: 7.
+	self assert: flowInstance state equals: #done.
+	self assert: flowInstance innermostWaitingExecutor isNil
+]
+
+{ #category : 'tests' }
 FBFlowInstanceTest >> testActivationsAreDone [
 	| flowInstance |
 	flowInstance := FBFlow simpleFlow newInstance.

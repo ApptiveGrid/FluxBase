@@ -262,6 +262,26 @@ FBFlowInstance >> initializeExecutor [
 	executor := self buildRootExecutor
 ]
 
+{ #category : 'accessing' }
+FBFlowInstance >> innermostWaitingExecutor [
+    "the deepest executor of the active stack that has something suspended, or nil.
+
+    #activeExecutors is outermost-first, so the last match is the innermost one - the
+    executor that suspended most recently, which is what a caller means by 'the node
+    execution just stopped on'. asking #executor directly is not the same thing: a sub
+    flow call leaves an FBSubFlowExecutor current whose own #suspended is empty by
+    design (see FBSubFlowExecutor>>suspended) while the wait sits in the child
+    instance's executor one level in, so #executor answers nothing was suspended for
+    an instance that is in fact blocked.
+
+    use #suspended instead when the question is what blocks the instance at all rather
+    than where it stopped last"
+
+    ^ self activeExecutors reversed
+          detect: [ :each | each suspended notEmpty ]
+          ifNone: [ nil ]
+]
+
 { #category : 'testing' }
 FBFlowInstance >> isDone [
 	^ executor isDone

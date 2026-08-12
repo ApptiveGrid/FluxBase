@@ -45,6 +45,25 @@ FBSubFlowNodeTest >> testEnteringSubFlowOnlyPushesAFrameAndRunsNoChildNode [
 ]
 
 { #category : 'tests' }
+FBSubFlowNodeTest >> testInnermostWaitingExecutorReachesIntoTheSubFlow [
+    "while a sub flow call is open #executor is the FBSubFlowExecutor frame, whose own
+    #suspended is empty by design - so asking it where execution stopped answers
+    nothing for an instance that is in fact blocked. #innermostWaitingExecutor has to
+    find the child instance's waiting executor instead"
+    | childFlow instance |
+    childFlow := self flowWaitingForever.
+    instance := (self flowCalling: childFlow) newInstance.
+    instance executeWith: 1.
+
+    self assert: instance state equals: #waiting.
+    self assert: instance executor suspended isEmpty.
+    self deny: instance innermostWaitingExecutor == instance executor.
+    self
+        assert: instance innermostWaitingExecutor suspended asArray
+        equals: instance suspended asArray
+]
+
+{ #category : 'tests' }
 FBSubFlowNodeTest >> testParentTracksItsSubFlowInstancesButChildHasNoBackReference [
     | childStart childFlow parentStart subNode parentFlow instance childInstance |
     childStart := FBStartEvent new.
