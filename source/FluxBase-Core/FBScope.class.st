@@ -1,3 +1,26 @@
+"
+I am a scope: a region of a running flow whose tokens share a fate.
+
+Where FBToken tracks a single strand of execution, I track a set of them that
+can be bounded, completed or cancelled together. That is why I exist next to the
+token rather than inside it: a token and its parent chain describe one path, but
+they cannot enumerate the tokens that make up a region.
+
+	id			my own identity
+	parentId	the id of the scope I am nested in, i.e. my enclosing scope.
+			Nesting, not sequence - do not confuse this with FBToken>>parentId,
+			which points at another token and records which predecessor an
+			activation arrived through.
+	ownerNode	the node that opened me
+	tokens		the tokens living in me
+	state		#active while I am alive
+	cancellationPolicy	how my tokens are to be cancelled together
+
+I am Phase-2 infrastructure and only partly consumed so far: tokens and
+cancellationPolicy have no readers yet (they are meant for the cancellation
+patterns WCP-19/20/25), and FBToken>>scopeId stays nil for as long as nothing
+creates scopes at runtime.
+"
 Class {
 	#name : 'FBScope',
 	#superclass : 'Object',
@@ -49,6 +72,8 @@ FBScope >> ownerNode: aFBNode [
 
 { #category : 'as yet unclassified' }
 FBScope >> parentId [
+	"The id of the scope I am nested in. Nesting, not sequence - FBToken>>parentId
+	is a different relation, see my class comment."
 	^ parentId
 ]
 
