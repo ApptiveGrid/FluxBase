@@ -96,7 +96,10 @@ FBBaseExecutor >> flowInstance: aFBFlowInstance [
 
 { #category : 'testing' }
 FBBaseExecutor >> hasErrors [
-	^ self activations anySatisfy: [ :each | each hasError ]
+	"not an executor-local fact: #activations is the flow instance's collection, shared
+	by every executor of that instance, so this answers the same for all of them"
+
+	^ flowInstance hasErrors
 ]
 
 { #category : 'testing' }

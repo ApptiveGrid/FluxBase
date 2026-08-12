@@ -219,6 +219,18 @@ FBFlowInstance >> flow: aFBFlow [
 	flow := aFBFlow 
 ]
 
+{ #category : 'testing' }
+FBFlowInstance >> hasErrors [
+	"whether any activation of this instance errored.
+
+	the fact belongs here, not on the executor: FBBaseExecutor>>hasErrors answers it
+	from #activations, which is this instance's one collection shared by all of its
+	executors - so every executor answered identically, and #state used to loop over
+	the whole stack asking the same question once per executor"
+
+	^ activations anySatisfy: [ :each | each hasError ]
+]
+
 { #category : 'accessing' }
 FBFlowInstance >> id [
 
@@ -415,7 +427,7 @@ FBFlowInstance >> start [
 FBFlowInstance >> state [
 
 	(executor isNil or: [self rootExecutor isCreated]) ifTrue: [ ^ #created ].
-	(self executors anySatisfy:[:each | each hasErrors]) ifTrue: [ ^ #error ].
+	self hasErrors ifTrue: [ ^ #error ].
 	(self executors anySatisfy:[:each | each isWaiting])  ifTrue: [ ^ #waiting ].
 	(self executors allSatisfy:[:each | each isDone]) ifTrue: [ ^ #done ].
 	(self isRootExecutor not or: [self rootExecutor isRunning]) ifTrue: [ ^ #running ].
