@@ -1,3 +1,23 @@
+"
+I am the bookkeeping for one join node waiting on one execution of one split.
+
+FBFlowInstance keeps me under the key { joinNode. splitId } - see
+#joinStateFor:splitId: - so every pass through a split gets its own instance of
+me. That is what keeps a loop from inheriting the previous pass's arrivals and
+releasing the join immediately.
+
+	joinNode	the join I belong to
+	splitId		which split execution I belong to (see FBToken>>splitId)
+	expected	the branches that have to arrive before the join may proceed
+	arrived		sourceNode -> value for the branches that already did. The key
+			comes from resolving FBToken>>parentId back to its activation, so
+			an arrival is attributed to the branch it actually came through.
+	policy		#all when the expected count comes from the join's own incoming
+			transitions, #activeOnly when the split registered a count itself -
+			an OR-split only starts the branches whose condition matched, so
+			the join must not wait for the others.
+	released	guard against releasing the same join twice
+"
 Class {
 	#name : 'FBJoinState',
 	#superclass : 'Object',
