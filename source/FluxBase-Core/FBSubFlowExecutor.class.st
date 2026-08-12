@@ -143,6 +143,6 @@ FBSubFlowExecutor >> suspended [
     picks its holder by searching #suspended and then mutates that very collection
     and looks up an activation in it - handing it the child's nodes would resolve
     them against the caller's activations. sub flow waits are reached through
-    FBFlowInstance>>activeSubFlowInstance instead"
+    FBFlowInstance>>activeExecutors instead"
     ^ suspended
 ]
