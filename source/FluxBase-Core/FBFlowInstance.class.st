@@ -5,7 +5,6 @@ Class {
 		'id',
 		'flow',
 		'executor',
-		'executors',
 		'announcer',
 		'events',
 		'activations',
@@ -135,8 +134,8 @@ FBFlowInstance >> announcer [
 
 { #category : 'accessing' }
 FBFlowInstance >> atEnd [
-	^ (executor = self rootExecutor) and: [  
-		executors allSatisfy: [ :each | each atEnd ]
+	^ (executor = self rootExecutor) and: [
+		self executors allSatisfy: [ :each | each atEnd ]
 		].
 ]
 
@@ -183,8 +182,25 @@ FBFlowInstance >> executor [
 
 { #category : 'accessing' }
 FBFlowInstance >> executors [
+	"the live executor stack, outermost first - derived from #executor and the
+	#suspendedExecutor chain rather than stored, which is the same set of links
+	FBBaseExecutor>>rootExecutor already walks.
 
-	^ executors
+	it used to be an instance variable that #pushExecutor: appended to and
+	#popExecutor: never removed from, so it accumulated every executor any scope had
+	ever opened. that is what let #parallelExecutorFrom:ifAbsent: answer a finished
+	executor from an earlier iteration of an enclosing parallel scope - see
+	FBFlowTest>>testNestedParallelNodeInnerForkOutputFollowsRunningIteration.
+	deriving it makes the accumulation unrepresentable instead of relying on every
+	push/pop path to keep a second structure in agreement with #executor"
+
+	| stack current |
+	stack := OrderedCollection new.
+	current := executor.
+	[ current notNil ] whileTrue: [
+		stack addFirst: current.
+		current := current suspendedExecutor ].
+	^ stack
 ]
 
 { #category : 'as yet unclassified' }
@@ -225,17 +241,13 @@ FBFlowInstance >> initialValue: anObject [
 FBFlowInstance >> initialize [ 
 	super initialize.
 	id := FBIdGenerator current newId.
-	activations := OrderedCollection new.
-	executors := OrderedCollection new.
-	
+	activations := OrderedCollection new
 ]
 
 { #category : 'accessing' }
 FBFlowInstance >> initializeExecutor [
 	executor ifNotNil: [ ^ self ].
-	executor := self buildRootExecutor.
-	executors add: executor.
-	
+	executor := self buildRootExecutor
 ]
 
 { #category : 'testing' }
@@ -322,7 +334,11 @@ FBFlowInstance >> nextTransition [
 { #category : 'accessing' }
 FBFlowInstance >> parallelExecutorFrom: aNode ifAbsent: aBlock [
 
-	^ executors detect: [ :each | each isParallel and: [each node = aNode] ] ifNone: aBlock 
+	"#executors is the live stack, so this can only ever answer a scope that is
+	currently open - never a finished executor from an earlier iteration of an
+	enclosing parallel scope, which is what the stored collection used to allow"
+
+	^ self executors detect: [ :each | each isParallel and: [each node = aNode] ] ifNone: aBlock
 ]
 
 { #category : 'accessing' }
@@ -342,9 +358,10 @@ FBFlowInstance >> printOn: aStream [
 
 { #category : 'as yet unclassified' }
 FBFlowInstance >> pushExecutor: anExecutor [
- 
-	executors add: anExecutor.
-	executor := anExecutor 
+	"#suspendedExecutor is the only link that has to be set here: #executors is derived
+	from it, so there is no second structure left to keep in agreement"
+
+	executor := anExecutor
 		flowInstance: self;
 		suspendedExecutor: executor;
 		yourself

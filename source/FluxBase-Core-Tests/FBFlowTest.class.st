@@ -289,7 +289,9 @@ FBFlowTest >> testParallelNodeAsLastNodeStops [
 	instance executeWith: { 1. 2. 3 }.
 	self assert: instance atEnd.
 	self assert: instance state equals: #done.
-	"no parallel executor should have been initialized as there was no outgoing node to fan out to"
+	"the stack is fully unwound - the root executor and nothing else. #executors is the
+	live stack, so this no longer distinguishes 'never pushed' from 'pushed and popped';
+	it does still pin down the actual bug, which was an executor left current forever"
 	self assert: instance executors size equals: 1.
 ]
 
