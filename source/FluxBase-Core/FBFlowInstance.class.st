@@ -219,6 +219,18 @@ FBFlowInstance >> flow: aFBFlow [
 	flow := aFBFlow 
 ]
 
+{ #category : 'testing' }
+FBFlowInstance >> hasErrors [
+	"whether any activation of this instance errored.
+
+	the fact belongs here, not on the executor: FBBaseExecutor>>hasErrors answers it
+	from #activations, which is this instance's one collection shared by all of its
+	executors - so every executor answered identically, and #state used to loop over
+	the whole stack asking the same question once per executor"
+
+	^ activations anySatisfy: [ :each | each hasError ]
+]
+
 { #category : 'accessing' }
 FBFlowInstance >> id [
 
@@ -248,6 +260,26 @@ FBFlowInstance >> initialize [
 FBFlowInstance >> initializeExecutor [
 	executor ifNotNil: [ ^ self ].
 	executor := self buildRootExecutor
+]
+
+{ #category : 'accessing' }
+FBFlowInstance >> innermostWaitingExecutor [
+    "the deepest executor of the active stack that has something suspended, or nil.
+
+    #activeExecutors is outermost-first, so the last match is the innermost one - the
+    executor that suspended most recently, which is what a caller means by 'the node
+    execution just stopped on'. asking #executor directly is not the same thing: a sub
+    flow call leaves an FBSubFlowExecutor current whose own #suspended is empty by
+    design (see FBSubFlowExecutor>>suspended) while the wait sits in the child
+    instance's executor one level in, so #executor answers nothing was suspended for
+    an instance that is in fact blocked.
+
+    use #suspended instead when the question is what blocks the instance at all rather
+    than where it stopped last"
+
+    ^ self activeExecutors reversed
+          detect: [ :each | each suspended notEmpty ]
+          ifNone: [ nil ]
 ]
 
 { #category : 'testing' }
@@ -333,12 +365,11 @@ FBFlowInstance >> nextTransition [
 
 { #category : 'accessing' }
 FBFlowInstance >> parallelExecutorFrom: aNode ifAbsent: aBlock [
+	"#executors is the live stack, so this can only ever answer a scope that is currently
+	open - never a finished executor from an earlier iteration of an enclosing parallel
+	scope, which is what the stored collection used to allow"
 
-	"#executors is the live stack, so this can only ever answer a scope that is
-	currently open - never a finished executor from an earlier iteration of an
-	enclosing parallel scope, which is what the stored collection used to allow"
-
-	^ self executors detect: [ :each | each isParallel and: [each node = aNode] ] ifNone: aBlock
+	^ self executors detect: [ :each | each isParallel and: [ each node = aNode ] ] ifNone: aBlock
 ]
 
 { #category : 'accessing' }
@@ -415,7 +446,7 @@ FBFlowInstance >> start [
 FBFlowInstance >> state [
 
 	(executor isNil or: [self rootExecutor isCreated]) ifTrue: [ ^ #created ].
-	(self executors anySatisfy:[:each | each hasErrors]) ifTrue: [ ^ #error ].
+	self hasErrors ifTrue: [ ^ #error ].
 	(self executors anySatisfy:[:each | each isWaiting])  ifTrue: [ ^ #waiting ].
 	(self executors allSatisfy:[:each | each isDone]) ifTrue: [ ^ #done ].
 	(self isRootExecutor not or: [self rootExecutor isRunning]) ifTrue: [ ^ #running ].

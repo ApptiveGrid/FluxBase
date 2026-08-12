@@ -46,6 +46,19 @@ FBBaseActivation >> errored [
 	state := #error
 ]
 
+{ #category : 'accessing' }
+FBBaseActivation >> currentValue [
+	"the value of the iteration this activation is on, i.e. what #value: last wrote.
+
+	for a plain activation that is simply #value. FBParallelActivation overrides it,
+	because there #value: writes one slot of a per-iteration array while #value answers
+	the whole array - so reading a written value back needs the index the write used.
+	that missing counterpart is the only reason FBParallelNode>>outputFor: could not
+	answer without an executor when no scope of its own is open"
+
+	^ self value
+]
+
 { #category : 'events' }
 FBBaseActivation >> events [
 	^ self flowInstance eventsOfActivation: self
