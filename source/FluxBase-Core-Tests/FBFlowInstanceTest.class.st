@@ -24,6 +24,23 @@ FBFlowInstanceTest >> testInnermostWaitingExecutorIsNilWhenNothingWaits [
 ]
 
 { #category : 'tests' }
+FBFlowInstanceTest >> testReadingScopeCreatesNoScope [
+	"regression test: #scope used to create a root scope on first read and assign it. that
+	is a write on read - on an instance materialized in a read-only Soil transaction it
+	marks the instance dirty and signals SoilWriteOnReadOnlyTransaction, which surfaced as
+	an unrelated-looking timeout in AGExternalFlowHookTest>>testPostToExternalHook.
+	a flow without a sub flow call needs no scope at all, so reading has to leave it nil"
+	| flowInstance |
+	flowInstance := FBFlow simpleFlow newInstance.
+	self assert: flowInstance scope isNil.
+	flowInstance scope.
+	self assert: flowInstance scope isNil.
+	flowInstance executeWith: 7.
+	self assert: flowInstance state equals: #done.
+	self assert: flowInstance scope isNil
+]
+
+{ #category : 'tests' }
 FBFlowInstanceTest >> testActivationsAreDone [
 	| flowInstance |
 	flowInstance := FBFlow simpleFlow newInstance.

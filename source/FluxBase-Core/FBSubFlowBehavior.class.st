@@ -7,9 +7,22 @@ Class {
 
 { #category : 'private' }
 FBSubFlowBehavior >> buildChildScope [
-    "answer a new scope for the sub flow call, one level deeper than the calling flow instance's current scope. signals FBSubFlowMaxDepthExceeded if that would exceed the node's configured maxDepth"
-    | parentScope |
-    parentScope := activation flowInstance scope.
+    "answer a new scope for the sub flow call, one level deeper than the calling flow
+    instance's scope. signals FBSubFlowMaxDepthExceeded if that would exceed the node's
+    configured maxDepth.
+
+    creates the caller's root scope if it has none yet, which is the case for the
+    outermost instance up to its first sub flow call. that write lives here rather than
+    in a lazy FBFlowInstance>>scope getter for one reason: this is the first moment a
+    scope is actually needed, and it is reached from a node activation, so a write
+    transaction is guaranteed - whereas a plain read of #scope can happen in a read-only
+    one, where assigning signals SoilWriteOnReadOnlyTransaction"
+    | instance parentScope |
+    instance := activation flowInstance.
+    parentScope := instance scope.
+    parentScope ifNil: [
+        parentScope := FBScope rootOwnedBy: nil.
+        instance scope: parentScope ].
     parentScope depth + 1 > self node maxDepth
         ifTrue: [ FBSubFlowMaxDepthExceeded signal: 'sub flow call depth exceeds maximum of ', self node maxDepth printString ].
     ^ parentScope childOwnedBy: self node

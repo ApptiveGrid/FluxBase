@@ -64,6 +64,26 @@ FBSubFlowNodeTest >> testInnermostWaitingExecutorReachesIntoTheSubFlow [
 ]
 
 { #category : 'tests' }
+FBSubFlowNodeTest >> testSubFlowCallCreatesTheCallersRootScope [
+    "the caller has no scope until a sub flow call needs one - FBSubFlowBehavior>>buildChildScope
+    creates it there, rather than a lazy #scope getter creating it on any read (see
+    FBFlowInstanceTest>>testReadingScopeCreatesNoScope). the depth chain has to come out
+    the same either way"
+    | childStart childFlow instance |
+    childStart := FBStartEvent new.
+    childStart addOutgoingNode: FBEndEvent new.
+    childFlow := FBFlow new start: childStart.
+
+    instance := (self flowCalling: childFlow) newInstance.
+    self assert: instance scope isNil.
+    instance executeWith: 1.
+
+    self assert: instance scope notNil.
+    self assert: instance scope depth equals: 0.
+    self assert: instance subFlowInstances first scope depth equals: 1
+]
+
+{ #category : 'tests' }
 FBSubFlowNodeTest >> testParentTracksItsSubFlowInstancesButChildHasNoBackReference [
     | childStart childFlow parentStart subNode parentFlow instance childInstance |
     childStart := FBStartEvent new.
