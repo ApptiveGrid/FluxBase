@@ -29,7 +29,9 @@ FBNodeActivationEvent >> printOn: aStream [
 
 { #category : 'as yet unclassified' }
 FBNodeActivationEvent >> scopeId [
-	^ activation token scopeId
+	"The event log is an outside-facing representation, so it reports the scope by id
+	even though the token itself references the scope directly."
+	^ activation token scope ifNotNil: [ :each | each id ]
 ]
 
 { #category : 'as yet unclassified' }

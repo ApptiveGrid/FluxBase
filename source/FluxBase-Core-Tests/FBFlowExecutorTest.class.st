@@ -63,7 +63,7 @@ FBFlowExecutorTest >> testFollowTransitionPropagatesTokenParentageAcrossASingleS
 	task := instance flow nodes second.
 	startToken := (instance activationOfNode: instance start) token.
 	taskToken := (instance activationOfNode: task) token.
-	self assert: taskToken parentId equals: startToken id
+	self assert: taskToken parent equals: startToken
 ]
 
 { #category : 'as yet unclassified' }
@@ -169,7 +169,7 @@ FBFlowExecutorTest >> testStartActivationTokenHasNoParent [
 	| instance |
 	instance := FBFlow simpleFlow newInstance.
 	instance executeWith: 7.
-	self assert: (instance activationOfNode: instance start) token parentId isNil
+	self assert: (instance activationOfNode: instance start) token parent isNil
 ]
 
 { #category : 'as yet unclassified' }
@@ -195,8 +195,8 @@ FBFlowExecutorTest >> testTokenLineagePropagatesAcrossMultipleSequentialSteps [
 	startToken := (instance activationOfNode: instance start) token.
 	taskToken := (instance activationOfNode: task) token.
 	endToken := (instance activationOfNode: instance flow end) token.
-	self assert: taskToken parentId equals: startToken id.
-	self assert: endToken parentId equals: taskToken id.
+	self assert: taskToken parent equals: startToken.
+	self assert: endToken parent equals: taskToken.
 	self assert: ({ startToken id. taskToken id. endToken id } asSet size) equals: 3
 ]
 

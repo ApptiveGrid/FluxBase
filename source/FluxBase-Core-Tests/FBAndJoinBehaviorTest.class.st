@@ -71,9 +71,9 @@ FBAndJoinBehaviorTest >> testDuplicateArrivalFromTheSameSourceNodeIsNotCountedTw
 	realActivationForA := instance activationOfNode: a.
 	splitIdUsed := realActivationForA token splitId.
 	duplicate1 := FBActivation new executor: instance executor; node: join; argument: 10; yourself.
-	duplicate1 token splitId: splitIdUsed; branchId: realActivationForA token branchId; parentId: realActivationForA token id.
+	duplicate1 token splitId: splitIdUsed; branchId: realActivationForA token branchId; parent: realActivationForA token.
 	duplicate2 := FBActivation new executor: instance executor; node: join; argument: 20; yourself.
-	duplicate2 token splitId: splitIdUsed; branchId: realActivationForA token branchId; parentId: realActivationForA token id.
+	duplicate2 token splitId: splitIdUsed; branchId: realActivationForA token branchId; parent: realActivationForA token.
 	(join defaultBehaviorClass new activation: duplicate1; yourself) execute.
 	(join defaultBehaviorClass new activation: duplicate2; yourself) execute.
 	joinState := instance joinStateFor: join splitId: splitIdUsed.

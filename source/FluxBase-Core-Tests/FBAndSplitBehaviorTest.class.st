@@ -45,8 +45,8 @@ FBAndSplitBehaviorTest >> testBranchTokensParentIdPointsAtTheSplitsOwnTokenId [
 	splitToken := (instance executor activationOf: split) token.
 	aToken := (instance executor activationOf: a) token.
 	bToken := (instance executor activationOf: b) token.
-	self assert: aToken parentId equals: splitToken id.
-	self assert: bToken parentId equals: splitToken id
+	self assert: aToken parent equals: splitToken.
+	self assert: bToken parent equals: splitToken
 ]
 
 { #category : 'as yet unclassified' }
@@ -91,7 +91,7 @@ FBAndSplitBehaviorTest >> testSplitIdAndBranchIdSurviveAnIntermediateNodeBeforeT
 	self assert: a2Token splitId equals: aToken splitId.
 	self assert: a2Token splitId equals: bToken splitId.
 	self assert: a2Token branchId equals: aToken branchId.
-	self assert: a2Token parentId equals: aToken id
+	self assert: a2Token parent equals: aToken
 ]
 
 { #category : 'tests' }

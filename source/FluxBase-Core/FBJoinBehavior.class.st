@@ -8,17 +8,16 @@ Class {
 
 { #category : 'as yet unclassified' }
 FBJoinBehavior >> execute [
-	| joinState token sourceActivation sourceNode |
+	| joinState |
 	activation value: self argument.
-	token := activation token.
-	joinState := activation instance joinStateFor: activation node splitId: token splitId.
-	sourceActivation := activation instance activations
-		detect: [ :act | act token id = token parentId ]
-		ifNone: [ nil ].
-	sourceNode := sourceActivation ifNotNil: [ sourceActivation node ].
-	joinState arrived at: sourceNode put: self argument.
+	joinState := activation instance
+		joinStateFor: activation node
+		splitId: activation token splitId.
+	"key each arrival by the node it came from, so the branches stay distinguishable
+	and the join's own output reads as sourceNode -> value"
+	joinState arrived at: activation sourceNode put: self argument.
 	activation done.
-	(joinState arrived size >= joinState expected size) ifTrue: [ 
+	(joinState arrived size >= joinState expected size) ifTrue: [
 		activation value: joinState arrived.
 		activation followAllOutgoing ]
 ]
