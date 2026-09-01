@@ -7,7 +7,8 @@ Class {
 		'suspended',
 		'suspendedExecutor',
 		'impliedContinuationNode',
-		'impliedTransition'
+		'impliedTransition',
+		'suspendedTokens'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -59,7 +60,19 @@ FBBaseExecutor >> addPending: aTransition withToken: aToken [
 
 { #category : 'accessing' }
 FBBaseExecutor >> addWaiting: aNode [
-	suspended add: aNode
+	self addWaiting: aNode withToken: nil
+]
+
+{ #category : 'accessing' }
+FBBaseExecutor >> addWaiting: aNode withToken: aToken [
+	"aToken is remembered alongside the suspension rather than wrapped into it, so
+	#suspended stays a plain collection of whatever was suspended - callers read its
+	elements as transitions (#target/#source) or as nodes (#includes:/#remove:) all
+	over both FluxBase and ApptiveBase, and none of them has to change."
+	suspended add: aNode.
+	aToken ifNotNil: [
+		suspendedTokens ifNil: [ suspendedTokens := IdentityDictionary new ].
+		suspendedTokens at: aNode put: aToken ]
 ]
 
 { #category : 'services' }
@@ -182,6 +195,17 @@ FBBaseExecutor >> isWaiting [
 { #category : 'accessing' }
 FBBaseExecutor >> lastValueOf: aFBNode [
 	^ (self activationOf: aFBNode) value.
+]
+
+{ #category : 'accessing' }
+FBBaseExecutor >> takeTokenForSuspended: aNode [
+	"answer and forget the token stored for aNode's suspension, or nil if there is
+	none - which is also the case for executors persisted before #suspendedTokens
+	existed, hence the nil guard rather than a lazy initialization (a lazy one would
+	mark the executor dirty on a pure read, see FBBaseActivation>>token)"
+
+	suspendedTokens ifNil: [ ^ nil ].
+	^ suspendedTokens removeKey: aNode ifAbsent: [ nil ]
 ]
 
 { #category : 'accessing' }
