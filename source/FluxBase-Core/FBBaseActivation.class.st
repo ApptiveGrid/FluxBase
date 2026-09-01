@@ -32,7 +32,6 @@ FBBaseActivation >> childToken [
 		parent: self token;
 		scope: self token scope;
 		splitId: self token splitId;
-		branchId: self token branchId;
 		yourself
 ]
 
@@ -230,9 +229,9 @@ FBBaseActivation >> waitForNode: aNode [
 FBBaseActivation >> waitForNode: aNode withToken: aToken [
 	"aToken is the token the target would have been activated with. It has to be kept
 	across the suspension: whoever resumes builds a fresh activation, and without the
-	token that activation loses its #splitId/#branchId - a form suspended behind a
-	split gateway would then reach a downstream join under a different split id and
-	the join could never complete."
+	token that activation loses its #splitId - a form suspended behind a split gateway
+	would then reach a downstream join under a different split id and the join could
+	never complete."
 	state := #waiting.
 	executor addWaiting: aNode withToken: aToken
 ]

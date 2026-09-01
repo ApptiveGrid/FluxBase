@@ -102,7 +102,7 @@ FBAndSplitBehaviorTest >> testBranchTokensParentIdPointsAtTheSplitsOwnTokenId [
 ]
 
 { #category : 'as yet unclassified' }
-FBAndSplitBehaviorTest >> testBranchesShareASplitIdButHaveDistinctBranchIds [
+FBAndSplitBehaviorTest >> testBranchesOfOneSplitShareASplitId [
 	| start split a b end flow instance aToken bToken |
 	start := FBStartEvent new.
 	split := FBAndSplit named: 'split'.
@@ -118,12 +118,11 @@ FBAndSplitBehaviorTest >> testBranchesShareASplitIdButHaveDistinctBranchIds [
 	aToken := (instance executor activationOf: a) token.
 	bToken := (instance executor activationOf: b) token.
 	self assert: aToken splitId notNil.
-	self assert: aToken splitId equals: bToken splitId.
-	self deny: aToken branchId equals: bToken branchId
+	self assert: aToken splitId equals: bToken splitId
 ]
 
 { #category : 'as yet unclassified' }
-FBAndSplitBehaviorTest >> testSplitIdAndBranchIdSurviveAnIntermediateNodeBeforeTheMerge [
+FBAndSplitBehaviorTest >> testSplitIdSurvivesAnIntermediateNodeBeforeTheMerge [
 	| start split a a2 b end flow instance aToken a2Token bToken |
 	start := FBStartEvent new.
 	split := FBAndSplit named: 'split'.
@@ -142,7 +141,6 @@ FBAndSplitBehaviorTest >> testSplitIdAndBranchIdSurviveAnIntermediateNodeBeforeT
 	bToken := (instance executor activationOf: b) token.
 	self assert: a2Token splitId equals: aToken splitId.
 	self assert: a2Token splitId equals: bToken splitId.
-	self assert: a2Token branchId equals: aToken branchId.
 	self assert: a2Token parent equals: aToken
 ]
 
@@ -165,4 +163,37 @@ FBAndSplitBehaviorTest >> testValuePropagatesToEachBranch [
 
 	self assert: (instance activations detect: [ :each | each node = a ]) argument equals: 42.
 	self assert: (instance activations detect: [ :each | each node = b ]) argument equals: 42
+]
+
+{ #category : 'as yet unclassified' }
+FBAndSplitBehaviorTest >> testJoinIsReleasedWhenBothBranchesArriveThroughTheSamePredecessor [
+	"Both branches of one split reach the join through the same predecessor node 'a':
+	one directly, the other after passing 'b' first. FBJoinBehavior keys FBJoinState>>arrived
+	by FBBaseActivation>>sourceNode, so both arrivals land under the same key.
+	The collision is real - #arrived holds one entry for two arrivals - but it does not
+	stall the join: #expected comes from the join's own incoming transitions, and both
+	branches share the single transition a --> join, so one arrival already satisfies it.
+	The join is released twice instead of once, which is the open question of whether a
+	possibility needs its own object, not of how arrivals are keyed."
+	| start split a b join end flow instance |
+	start := FBStartEvent new.
+	split := FBAndSplit named: 'split'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	join := FBAndJoin named: 'join'.
+	end := FBEndEvent new.
+	start --> split.
+	split --> a --> join.
+	split --> b --> a.
+	join --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 42.
+	"the scenario only holds if 'a' really runs twice - once per branch"
+	self
+		assert: (instance activations select: [ :each | each node = a ]) size
+		equals: 2.
+	self assert: instance atEnd.
+	self assert: instance state equals: #done.
+	self assert: (instance activations anySatisfy: [ :each | each node = end ])
 ]
