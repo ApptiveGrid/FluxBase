@@ -104,8 +104,18 @@ FBBaseActivation >> followTransition: aTransition [
 
 { #category : 'as yet unclassified' }
 FBBaseActivation >> followTransition: aTransition withToken: aToken [
-	(self transitionMatches: aTransition) ifTrue: [
-		executor flowInstance executor addPending: aTransition withToken: aToken ]
+	"the #requiresTrigger check belongs here, on the single choke point every
+	transition passes through. FBMultiChoiceGatewayBehavior and FBAndSplitBehavior
+	send this variant directly, so a check placed on #followTransition: alone (as it
+	used to be, in ApptiveBase's FBBaseActivation>>followTransition:do:) was bypassed
+	by exactly those two: a trigger-requiring target behind a split gateway was
+	activated immediately, taking the gateway's value as its own output instead of
+	waiting for the trigger. The check comes after #transitionMatches: so a branch
+	condition still decides first."
+	(self transitionMatches: aTransition) ifFalse: [ ^ self ].
+	aTransition target requiresTrigger ifTrue: [
+		^ self waitForNode: aTransition withToken: aToken ].
+	executor flowInstance executor addPending: aTransition withToken: aToken
 ]
 
 { #category : 'testing' }
@@ -213,6 +223,16 @@ FBBaseActivation >> transitionMatches: aTransition [
 
 { #category : 'as yet unclassified' }
 FBBaseActivation >> waitForNode: aNode [
+	self waitForNode: aNode withToken: nil
+]
+
+{ #category : 'as yet unclassified' }
+FBBaseActivation >> waitForNode: aNode withToken: aToken [
+	"aToken is the token the target would have been activated with. It has to be kept
+	across the suspension: whoever resumes builds a fresh activation, and without the
+	token that activation loses its #splitId/#branchId - a form suspended behind a
+	split gateway would then reach a downstream join under a different split id and
+	the join could never complete."
 	state := #waiting.
-	executor addWaiting: aNode
+	executor addWaiting: aNode withToken: aToken
 ]

@@ -289,6 +289,16 @@ FBNode >> outputFor: anActivation [
 	^ anActivation value
 ]
 
+{ #category : 'testing' }
+FBNode >> requiresTrigger [
+	"hook: does this node only proceed on an explicit external trigger (e.g. a
+	submitted form)? such a node must not be activated when a transition into it is
+	followed - the transition is suspended instead, see
+	FBBaseActivation>>followTransition:withToken:"
+
+	^ false
+]
+
 { #category : 'printing' }
 FBNode >> printOn: aStream [ 
 	aStream << 'node name=' << name asString
