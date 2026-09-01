@@ -198,14 +198,19 @@ FBBaseExecutor >> lastValueOf: aFBNode [
 ]
 
 { #category : 'accessing' }
-FBBaseExecutor >> takeTokenForSuspended: aNode [
-	"answer and forget the token stored for aNode's suspension, or nil if there is
-	none - which is also the case for executors persisted before #suspendedTokens
-	existed, hence the nil guard rather than a lazy initialization (a lazy one would
-	mark the executor dirty on a pure read, see FBBaseActivation>>token)"
+FBBaseExecutor >> takeTokenForSuspended: anObject [
+	"answer and forget the token stored for anObject, or nil if there is none - which
+	is also the case for executors persisted before #suspendedTokens existed, hence
+	the nil guard rather than a lazy initialization (a lazy one would mark the executor
+	dirty on a pure read, see FBBaseActivation>>token).
+
+	anObject is whatever #addWaiting:withToken: put into #suspended, and that is read
+	as a transition or as a node depending on the layer - ApptiveBase suspends
+	transitions - so there is no one class to name it after. The lookup is by identity,
+	so it has to be the very object that was suspended."
 
 	suspendedTokens ifNil: [ ^ nil ].
-	^ suspendedTokens removeKey: aNode ifAbsent: [ nil ]
+	^ suspendedTokens removeKey: anObject ifAbsent: [ nil ]
 ]
 
 { #category : 'accessing' }
