@@ -50,7 +50,7 @@ FBAndJoinBehaviorTest >> testDoesNotProceedUntilAllBranchesHaveArrived [
 ]
 
 { #category : 'as yet unclassified' }
-FBAndJoinBehaviorTest >> testDuplicateArrivalFromTheSameSourceNodeIsNotCountedTwice [
+FBAndJoinBehaviorTest >> testDuplicateArrivalOnTheSameBranchIsNotCountedTwice [
 	| start split a b join end flow instance realActivationForA duplicate1 duplicate2 joinState splitIdUsed |
 	start := FBStartEvent new.
 	split := FBAndSplit named: 'split'.
@@ -77,8 +77,10 @@ FBAndJoinBehaviorTest >> testDuplicateArrivalFromTheSameSourceNodeIsNotCountedTw
 	(join defaultBehaviorClass new activation: duplicate1; yourself) execute.
 	(join defaultBehaviorClass new activation: duplicate2; yourself) execute.
 	joinState := instance joinStateFor: join splitId: splitIdUsed.
+	"both arrivals carry the same parent token, so they are the same branch and
+	FBJoinBehavior>>arrivalKey answers the same key for both"
 	self assert: joinState arrived size equals: 1.
-	self assert: (joinState arrived at: a) equals: 20 "second delivery overwrites, still one entry"
+	self assert: joinState arrived values asArray equals: #( 20 ) "second delivery overwrites, still one entry"
 ]
 
 { #category : 'as yet unclassified' }
@@ -150,5 +152,69 @@ FBAndJoinBehaviorTest >> testJoinReleasesOnlyOnceWhenAFurtherArrivalStillSatisfi
 	self assert: (instance activations select: [ :each | each node = end ]) size equals: 1.
 	splitId := (instance executor activationOf: a) token splitId.
 	joinState := instance joinStateFor: join splitId: splitId.
+	self assert: joinState released
+]
+
+{ #category : 'as yet unclassified' }
+FBAndJoinBehaviorTest >> testArrivalsThroughTheSamePredecessorAreCountedSeparately [
+	"Two branches of one split reach the join through the same predecessor 'a' - one
+	directly, the other after passing 'b'. Keyed by source node both would collapse
+	onto one #arrived entry; keyed by the token they came through they stay countable."
+	| start split a b join end flow instance splitId joinState |
+	start := FBStartEvent new.
+	split := FBAndSplit named: 'split'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	join := FBAndJoin named: 'join'.
+	end := FBEndEvent new.
+	start --> split.
+	split --> a --> join.
+	split --> b --> a.
+	join --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 42.
+	splitId := (instance executor activationOf: a) token splitId.
+	joinState := instance joinStateFor: join splitId: splitId.
+	self assert: joinState arrived size equals: 2
+]
+
+{ #category : 'as yet unclassified' }
+FBAndJoinBehaviorTest >> testJoinReleasesWhenBranchesSharingAPredecessorSatisfyARegisteredCount [
+	"the shape a converted FBExclusiveGateway produces: the split registers how many
+	branches it started, so #expected is that count rather than the join's incoming
+	transitions. Both branches arriving through the same predecessor used to collapse
+	onto one #arrived entry, the count was never reached, and the join never released -
+	while the instance still reported itself done."
+	| start split a b join end flow instance splitId joinState parents |
+	start := FBStartEvent new.
+	split := FBAndSplit named: 'split'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	join := FBAndJoin named: 'join'.
+	end := FBEndEvent new.
+	start --> split.
+	split --> a --> join.
+	split --> b --> join.
+	join --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance initializeExecutor.
+	splitId := 'split-run'.
+	instance registerExpectedBranchCount: 2 forSplitId: splitId.
+	"two arrivals through the same predecessor 'a', on distinct branch tokens"
+	parents := (1 to: 2) collect: [ :each |
+		(FBActivation new executor: instance executor; node: a; yourself) token ].
+	parents doWithIndex: [ :parentToken :i |
+		| arrival |
+		arrival := FBActivation new
+			executor: instance executor;
+			node: join;
+			argument: i * 10;
+			yourself.
+		arrival token splitId: splitId; parent: parentToken.
+		(join defaultBehaviorClass new activation: arrival; yourself) execute ].
+	joinState := instance joinStateFor: join splitId: splitId.
+	self assert: joinState arrived size equals: 2.
 	self assert: joinState released
 ]
