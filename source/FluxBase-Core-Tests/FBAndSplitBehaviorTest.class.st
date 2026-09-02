@@ -173,8 +173,9 @@ FBAndSplitBehaviorTest >> testJoinIsReleasedWhenBothBranchesArriveThroughTheSame
 	The collision is real - #arrived holds one entry for two arrivals - but it does not
 	stall the join: #expected comes from the join's own incoming transitions, and both
 	branches share the single transition a --> join, so one arrival already satisfies it.
-	The join is released twice instead of once, which is the open question of whether a
-	possibility needs its own object, not of how arrivals are keyed."
+	That the second arrival still satisfies #expected is what the FBJoinState>>released
+	latch guards against - see
+	FBAndJoinBehaviorTest>>testJoinReleasesOnlyOnceWhenAFurtherArrivalStillSatisfiesExpected."
 	| start split a b join end flow instance |
 	start := FBStartEvent new.
 	split := FBAndSplit named: 'split'.
