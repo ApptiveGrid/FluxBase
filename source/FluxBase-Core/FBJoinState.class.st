@@ -9,9 +9,12 @@ releasing the join immediately.
 	joinNode	the join I belong to
 	splitId		which split execution I belong to (see FBToken>>splitId)
 	expected	the branches that have to arrive before the join may proceed
-	arrived		sourceNode -> value for the branches that already did. The key
-			comes from resolving FBToken>>parentId back to its activation, so
-			an arrival is attributed to the branch it actually came through.
+	arrived		branch -> value for the branches that already did, keyed by the
+			token an arrival came through (FBJoinBehavior>>arrivalKey). Two
+			branches of one split can share a predecessor node, so the node
+			cannot tell them apart while the token can. The join's own output
+			is re-keyed to sourceNode -> value on release, which is the shape
+			a following node can read (FBJoinBehavior>>outputFrom:).
 	policy		#all when the expected count comes from the join's own incoming
 			transitions, #activeOnly when the split registered a count itself -
 			an OR-split only starts the branches whose condition matched, so
