@@ -307,7 +307,6 @@ FBFlowInstance >> joinStateFor: aNode splitId: aSplitId [
 				expected: (registeredCount
 					ifNil: [ aNode incoming asOrderedCollection ]
 					ifNotNil: [ Array new: registeredCount ]);
-				policy: (registeredCount ifNil: [ #all ] ifNotNil: [ #activeOnly ]);
 				yourself ]
 ]
 
