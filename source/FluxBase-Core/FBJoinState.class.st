@@ -15,10 +15,6 @@ releasing the join immediately.
 			cannot tell them apart while the token can. The join's own output
 			is re-keyed to sourceNode -> value on release, which is the shape
 			a following node can read (FBJoinBehavior>>outputFrom:).
-	policy		#all when the expected count comes from the join's own incoming
-			transitions, #activeOnly when the split registered a count itself -
-			an OR-split only starts the branches whose condition matched, so
-			the join must not wait for the others.
 	released	guard against releasing the same join twice
 "
 Class {
@@ -30,7 +26,6 @@ Class {
 		'expected',
 		'arrived',
 		'released',
-		'policy',
 		'scopeId'
 	],
 	#category : 'FluxBase-Core-Model',
@@ -74,16 +69,6 @@ FBJoinState >> joinNode [
 { #category : 'as yet unclassified' }
 FBJoinState >> joinNode: aFBNode [
 	joinNode := aFBNode
-]
-
-{ #category : 'as yet unclassified' }
-FBJoinState >> policy [
-	^ policy
-]
-
-{ #category : 'as yet unclassified' }
-FBJoinState >> policy: aSymbol [
-	policy := aSymbol
 ]
 
 { #category : 'as yet unclassified' }
