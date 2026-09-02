@@ -16,6 +16,5 @@ FBAndSplitBehavior >> execute [
 		activation followTransition: transition withToken: (
 			activation childToken
 				splitId: splitId;
-				branchId: FBIdGenerator current newId;
 				yourself) ]
 ]

@@ -6,19 +6,17 @@ Class {
 }
 
 { #category : 'as yet unclassified' }
-FBActivationTest >> testChildTokenCarriesParentageAndScopeSplitBranchForward [
+FBActivationTest >> testChildTokenCarriesParentageAndScopeAndSplitForward [
 	| activation child scope |
 	scope := FBScope new.
 	activation := FBActivation new.
 	activation token
 		scope: scope;
-		splitId: 'split-1';
-		branchId: 'branch-1'.
+		splitId: 'split-1'.
 	child := activation childToken.
 	self assert: child parent equals: activation token.
 	self assert: child scope equals: scope.
 	self assert: child splitId equals: 'split-1'.
-	self assert: child branchId equals: 'branch-1'.
 	self deny: child id equals: activation token id
 ]
 

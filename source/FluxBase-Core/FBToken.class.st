@@ -22,7 +22,6 @@ to the token it came from.
 	splitId		shared by every token one split execution created. Keys the
 			FBJoinState, so a second pass through the same split gets its own
 			join state instead of colliding with the first.
-	branchId	unique per branch of a split
 	scope		the FBScope I live in
 
 My #parent and FBScope>>outer are deliberately named apart because they are
@@ -43,9 +42,8 @@ to resolving the old id. Nothing writes them any more, and they can be dropped
 once no such tokens are left in any store.
 
 Not all of me is wired up. Only #splitId and #parent currently drive decisions.
-#branchId is inherited but never consulted, #scope is not populated by anything
-yet, and #value, #state and #metadata have no readers at all - the engine keeps
-the current value on the activation, not on me.
+#scope is not populated by anything yet, and #value, #state and #metadata have no
+readers at all - the engine keeps the current value on the activation, not on me.
 "
 Class {
 	#name : 'FBToken',
@@ -57,7 +55,6 @@ Class {
 		'scope',
 		'parent',
 		'splitId',
-		'branchId',
 		'state',
 		'metadata',
 		'parentId',
@@ -77,16 +74,6 @@ FBToken >> activation [
 { #category : 'accessing' }
 FBToken >> activation: anFBBaseActivation [
 	activation := anFBBaseActivation
-]
-
-{ #category : 'as yet unclassified' }
-FBToken >> branchId [
-	^ branchId
-]
-
-{ #category : 'as yet unclassified' }
-FBToken >> branchId: anObject [
-	branchId := anObject
 ]
 
 { #category : 'as yet unclassified' }
