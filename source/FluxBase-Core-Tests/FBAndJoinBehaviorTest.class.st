@@ -124,3 +124,31 @@ FBAndJoinBehaviorTest >> testWorksWithThreeBranches [
 	self assert: (instance activations select: [ :act | act node = end ]) size equals: 1.
 	self assert: (instance activations select: [ :act | act node = join ]) size equals: 3
 ]
+
+{ #category : 'as yet unclassified' }
+FBAndJoinBehaviorTest >> testJoinReleasesOnlyOnceWhenAFurtherArrivalStillSatisfiesExpected [
+	"Two branches of one split reach the join through the same predecessor 'a', so both
+	arrivals key onto the same #arrived entry and the second one still finds #expected
+	satisfied. Without the FBJoinState>>released latch the join fires for both and
+	everything behind it runs twice."
+	| start split a b join end flow instance splitId joinState |
+	start := FBStartEvent new.
+	split := FBAndSplit named: 'split'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	join := FBAndJoin named: 'join'.
+	end := FBEndEvent new.
+	start --> split.
+	split --> a --> join.
+	split --> b --> a.
+	join --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 42.
+	"the join is entered twice - once per branch - but must release only once"
+	self assert: (instance activations select: [ :each | each node = join ]) size equals: 2.
+	self assert: (instance activations select: [ :each | each node = end ]) size equals: 1.
+	splitId := (instance executor activationOf: a) token splitId.
+	joinState := instance joinStateFor: join splitId: splitId.
+	self assert: joinState released
+]
