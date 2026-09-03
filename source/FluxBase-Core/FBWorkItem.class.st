@@ -7,10 +7,15 @@ carries the branch identity that FBJoinBehavior needs later (see FBToken), so it
 has to survive the trip through the pending queue rather than being recreated at
 the far end.
 
-Note that only FBFlowExecutor actually wraps its pending entries in me.
-FBBaseExecutor - and with it FBParallelExecutor - accepts a token in
-#addPending:withToken: but drops it on the floor, so tokens do not survive
-inside a parallel scope and every node there starts from a fresh default token.
+Every executor queues its work as me: FBBaseExecutor>>addPending:withToken: is
+the single writer of #pending, so a transition and its token cannot come apart
+on the way through the queue. A parallel scope's body is the one thing queued
+without a token of its own, because the executor - not an activation - queues
+it; FBParallelExecutor>>scopeToken mints the fork's child token for it when the
+work item is taken off the queue.
+
+A #pending entry read back out of an old store can still be a raw FBTransition,
+from before I existed. FBTransition>>transition duck-types as me for those.
 "
 Class {
 	#name : 'FBWorkItem',

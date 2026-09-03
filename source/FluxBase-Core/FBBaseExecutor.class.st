@@ -53,9 +53,19 @@ FBBaseExecutor >> addPending: aTransition [
 	^ self addPending: aTransition withToken: nil
 ]
 
-{ #category : 'as yet unclassified' }
+{ #category : 'adding' }
 FBBaseExecutor >> addPending: aTransition withToken: aToken [
-	pending add: aTransition
+	"a transition on its own is not enough to schedule work: the token carries the
+	branch identity a join reads later (see FBWorkItem and FBToken), so it has to
+	travel through the queue together with the transition rather than be recreated
+	at the far end. Every executor queues this way - #pending is the executor's own
+	bookkeeping, the token belongs to the flow instance's execution, and queueing is
+	the one place the two meet"
+
+	pending add: (FBWorkItem new
+			 transition: aTransition;
+			 token: aToken;
+			 yourself)
 ]
 
 { #category : 'accessing' }
@@ -250,7 +260,11 @@ FBBaseExecutor >> rootExecutor [
 
 { #category : 'as yet unclassified' }
 FBBaseExecutor >> scheduleStart [
-	pending add: (FBWorkItem new transition: flowInstance start; yourself).
+	"the start pseudo-transition is queued through #addPending: like any other work,
+	so #pending has a single writer. it carries no token: the start node's own
+	activation mints the first one (FBBaseActivation>>initialize)"
+
+	self addPending: flowInstance start.
 	flowInstance addEvent: FBFlowInstanceStarted new
 ]
 

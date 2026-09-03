@@ -21,10 +21,16 @@ FBParallelExecutor >> activate: activation [
 ]
 
 { #category : 'private' }
-FBParallelExecutor >> activateTransition: aTransition with: value [
+FBParallelExecutor >> activateTransition: aTransition with: value token: aToken [
+	"aToken is the token the queued work item carried, restored onto the activation the
+	way FBFlowExecutor>>step and FBBaseExecutor>>resumeWith: do. The activation itself
+	is cached per transition (see #newActivation:), so it is reused across the
+	iterations of this scope and the token has to be reset for each of them - a join
+	inside the scope reads #splitId off it while that iteration is running"
 
 	| activation |
 	activation := self newActivation: aTransition.
+	aToken ifNotNil: [ :token | activation token: token ].
 	activation argument: value.
 	self activate: activation
 ]
@@ -48,7 +54,7 @@ FBParallelExecutor >> buildImpliedContinuationNode [
 FBParallelExecutor >> continue [
     (pending isEmpty and: [ index < list size ]) ifTrue: [
         index := index + 1.
-        pending addAll: node outgoing ].
+        self queueScopeBody ].
 
     pending isEmpty ifFalse: [ ^ self ].
 
@@ -65,7 +71,7 @@ FBParallelExecutor >> execute [
 			self step ].
 		index := index + 1.
 		(index > list size) ifTrue: [ ^ self ].
-		pending addAll: node outgoing. 
+		self queueScopeBody. 
  	] repeat
 ]
 
@@ -144,7 +150,7 @@ FBParallelExecutor >> node [
 { #category : 'accessing' }
 FBParallelExecutor >> node: aFBParallelNode [ 
 	node := aFBParallelNode.
-	pending addAll: node outgoing 
+	self queueScopeBody
 ]
 
 { #category : 'services' }
@@ -174,9 +180,40 @@ FBParallelExecutor >> outputFor: anActivation [
 	^ anActivation value at: self index
 ]
 
+{ #category : 'private' }
+FBParallelExecutor >> queueScopeBody [
+	"queue this scope's body - the fork's outgoing transitions - for the iteration
+	being entered. All three places that start an iteration come through here (#node:
+	for the first one, #continue and #execute for the ones after it) so that none of
+	them writes into #pending itself: every entry there is an FBWorkItem, and a
+	transition put in raw would reach #step without the token it has to run under.
+	No token is minted here, see #scopeToken"
+
+	node outgoing do: [ :transition | self addPending: transition ]
+]
+
 { #category : 'services' }
 FBParallelExecutor >> resumeAfter: anExecutor [
     self continue
+]
+
+{ #category : 'private' }
+FBParallelExecutor >> scopeToken [
+	"the token the head of this scope's body runs under for the iteration being
+	entered: a child token of the fork's own activation, which is exactly what
+	FBBaseActivation>>followAllOutgoing would have handed out had the fork's outgoing
+	transitions been followed outside a parallel scope. A fresh one per iteration, so
+	two passes through a split inside the scope are two split executions and each gets
+	its own FBJoinState.
+
+	Minted in #step rather than in #queueScopeBody because #node: - the first of the
+	three places that queue the body - runs before FBFlowInstance>>pushExecutor: has
+	given this executor its flow instance, so the fork's activation is not reachable
+	yet at queueing time. Everything else in #pending was put there by
+	FBBaseActivation>>followTransition:withToken: and carries its own token, which is
+	what makes a missing one identify a body seed"
+
+	^ (self activationOf: node) childToken
 ]
 
 { #category : 'private' }
@@ -191,12 +228,16 @@ FBParallelExecutor >> shouldFollowTransition: transition with: value [
 
 { #category : 'services' }
 FBParallelExecutor >> step [
-	| transition lastValue |
-	transition := pending removeFirst.
+	| workItem transition lastValue |
+	workItem := pending removeFirst.
+	transition := workItem transition.
 	lastValue := transition source lastValueIn: self.
 
 	(self shouldFollowTransition: transition with: lastValue) ifTrue: [
-		self activateTransition: transition with: lastValue ].
+		self
+			activateTransition: transition
+			with: lastValue
+			token: (workItem token ifNil: [ self scopeToken ]) ].
 
 	"In case this executor is the current one we continue. If another 
 	executor has been pushed we just return to be suspended an continued
