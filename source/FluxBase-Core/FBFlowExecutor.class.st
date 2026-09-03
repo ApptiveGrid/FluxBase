@@ -11,16 +11,6 @@ Class {
 	#tag : 'Model'
 }
 
-{ #category : 'as yet unclassified' }
-FBFlowExecutor >> addPending: aTransition [
-	^ self addPending: aTransition withToken: nil
-]
-
-{ #category : 'as yet unclassified' }
-FBFlowExecutor >> addPending: aTransition withToken: aToken [
-	pending add: (FBWorkItem new transition: aTransition; token: aToken; yourself)
-]
-
 { #category : 'accessing' }
 FBFlowExecutor >> atEnd [
 	^ self isDone 
