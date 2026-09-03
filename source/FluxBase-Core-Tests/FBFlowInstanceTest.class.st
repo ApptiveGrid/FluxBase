@@ -221,6 +221,48 @@ FBFlowInstanceTest >> testNodeActivationEventsForDifferentNodesHaveDifferentToke
 ]
 
 { #category : 'tests' }
+FBFlowInstanceTest >> testNextTransitionAnswersATransitionAndNotTheWorkItemHoldingIt [
+	| flowInstance task |
+	flowInstance := FBFlow simpleFlow newInstance.
+	flowInstance initializeExecutor.
+	flowInstance step.
+	task := flowInstance flow nodes second.
+	self assert: flowInstance nextTransition class equals: FBTransition.
+	self assert: flowInstance nextTransition
+		equals: (flowInstance pending first transition).
+	self assert: flowInstance nextTransition source equals: flowInstance start.
+	self assert: flowInstance nextTransition target equals: task
+]
+
+{ #category : 'tests' }
+FBFlowInstanceTest >> testNextTransitionForTheStartPseudoTransition [
+	"the very first queued item holds the start node itself rather than a real
+	transition - FBBaseExecutor>>scheduleStart. It answers itself for #transition,
+	so #nextTransition stays readable on it"
+	| flowInstance |
+	flowInstance := FBFlow simpleFlow newInstance.
+	flowInstance initializeExecutor.
+	self assert: flowInstance nextTransition equals: flowInstance start.
+	self assert: flowInstance nextNode equals: flowInstance start
+]
+
+{ #category : 'tests' }
+FBFlowInstanceTest >> testNextTransitionToleratesRawTransitionPendingFromBeforeWorkItemMigration [
+	"an instance persisted before FBWorkItem existed can still have a raw FBTransition
+	sitting in pending after being loaded back into a newer image. #nextTransition
+	unwraps its queue entry, and FBTransition>>transition is what keeps that readable"
+	| flowInstance realTransition |
+	flowInstance := FBFlow simpleFlow newInstance.
+	flowInstance initializeExecutor.
+	realTransition := flowInstance start outgoing first.
+	flowInstance executor
+		instVarNamed: #pending
+		put: (OrderedCollection with: realTransition).
+	self assert: flowInstance nextTransition == realTransition.
+	self assert: flowInstance nextNode equals: realTransition target
+]
+
+{ #category : 'tests' }
 FBFlowInstanceTest >> testResumeWaitingAtContinuesTheFlow [
 	| flow instance waitNode |
 	flow := FBFlow simpleWaitFlow.

@@ -117,13 +117,28 @@ FBFlowExecutorTest >> testLastValueOfReturnsTheActivationsValue [
 ]
 
 { #category : 'as yet unclassified' }
-FBFlowExecutorTest >> testNextNodeStillWorksThroughTheWorkItemWrapper [
+FBFlowExecutorTest >> testNextNodeUnwrapsTheQueuedWorkItem [
 	| instance task |
 	instance := FBFlow simpleFlow newInstance.
 	instance initializeExecutor.
 	instance step.
 	task := instance flow nodes second.
 	self assert: instance nextNode equals: task
+]
+
+{ #category : 'as yet unclassified' }
+FBFlowExecutorTest >> testPendingItemIsNotAStandInForItsTransition [
+	"a work item holds a transition, it is not one. It used to answer #source and
+	#target by forwarding to its transition, which let a caller read the queue as if
+	it held transitions and never notice - see FBFlowInstance>>nextTransition, the
+	reader that did exactly that"
+	| instance workItem |
+	instance := FBFlow simpleFlow newInstance.
+	instance initializeExecutor.
+	workItem := instance pending first.
+	self assert: (workItem isKindOf: FBWorkItem).
+	self deny: (workItem respondsTo: #source).
+	self deny: (workItem respondsTo: #target)
 ]
 
 { #category : 'as yet unclassified' }
@@ -200,25 +215,3 @@ FBFlowExecutorTest >> testTokenLineagePropagatesAcrossMultipleSequentialSteps [
 	self assert: ({ startToken id. taskToken id. endToken id } asSet size) equals: 3
 ]
 
-{ #category : 'as yet unclassified' }
-FBFlowExecutorTest >> testWorkItemDuckTypesSourceAndTargetForARealTransition [
-	| instance task workItem |
-	instance := FBFlow simpleFlow newInstance.
-	instance initializeExecutor.
-	instance step.
-	task := instance flow nodes second.
-	workItem := instance pending first.
-	self assert: (workItem isKindOf: FBWorkItem).
-	self assert: workItem source equals: instance start.
-	self assert: workItem target equals: task
-]
-
-{ #category : 'as yet unclassified' }
-FBFlowExecutorTest >> testWorkItemDuckTypesSourceAndTargetForTheStartPseudoTransition [
-	| instance workItem |
-	instance := FBFlow simpleFlow newInstance.
-	instance initializeExecutor.
-	workItem := instance pending first.
-	self assert: workItem source equals: instance start.
-	self assert: workItem target equals: instance start
-]

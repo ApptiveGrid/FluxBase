@@ -97,6 +97,9 @@ FBBaseExecutor >> buildImpliedContinuationNode [
 
 { #category : 'accessing' }
 FBBaseExecutor >> firstPending [
+	"the next queued work item - not its transition. Callers that want the transition
+	ask the work item for it, see FBFlowInstance>>nextTransition"
+
 	^ pending first
 ]
 

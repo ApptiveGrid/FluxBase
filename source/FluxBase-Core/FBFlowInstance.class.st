@@ -359,7 +359,12 @@ FBFlowInstance >> nextNode [
 
 { #category : 'accessing' }
 FBFlowInstance >> nextTransition [
-	^ executor firstPending
+	"the transition the next step will follow. #firstPending answers the queued work
+	item that holds it, so unwrap it here - a work item is not a transition and must
+	not pass as one. An entry read back out of a store written before FBWorkItem
+	existed is a raw FBTransition and answers itself (FBTransition>>transition)"
+
+	^ executor firstPending transition
 ]
 
 { #category : 'accessing' }
