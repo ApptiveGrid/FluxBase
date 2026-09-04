@@ -69,3 +69,15 @@ FBTokenTest >> testNewTokenHasReadyStateAndUniqueId [
 	self assert: a id notNil.
 	self deny: a id equals: b id
 ]
+
+{ #category : 'as yet unclassified' }
+FBTokenTest >> testWaitingIsPartOfTheTokensVocabularyAndDoneIsNot [
+	"a strand is #ready or #waiting - and later #cancelled. It never becomes #done: it
+	ends by disappearing, not by carrying a state saying it ended (see my class comment)"
+	| token |
+	token := FBToken new.
+	self deny: token isWaiting.
+	token waiting.
+	self assert: token isWaiting.
+	self assert: token state equals: #waiting
+]
