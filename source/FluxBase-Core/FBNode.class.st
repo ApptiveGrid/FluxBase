@@ -299,6 +299,20 @@ FBNode >> requiresTrigger [
 	^ false
 ]
 
+{ #category : 'testing' }
+FBNode >> isExternallyResumable [
+	"hook: should a wait at this node be made reachable from outside, that is, get an
+	entry in the flow instance's FBWaitingRegistry? A form node and a remote sub flow
+	node have a waker outside the image and answer true; a condition wait on a date has
+	none and does not. Being reachable is a release, so it is asked of each node rather
+	than granted to everything that waits.
+
+	Sits next to #requiresTrigger, the other question asked of a node around a
+	transition into it. Nothing consults this yet"
+
+	^ false
+]
+
 { #category : 'printing' }
 FBNode >> printOn: aStream [ 
 	aStream << 'node name=' << name asString

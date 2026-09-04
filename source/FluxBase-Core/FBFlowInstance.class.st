@@ -12,7 +12,8 @@ Class {
 		'joinStates',
 		'splitBranchCounts',
 		'subFlowInstances',
-		'scope'
+		'scope',
+		'waitingRegistry'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -368,6 +369,35 @@ FBFlowInstance >> nextTransition [
 ]
 
 { #category : 'accessing' }
+FBFlowInstance >> openWaitingEntries [
+	"every externally reachable waiting spot open in me or in a flow instance executing
+	inside me, outermost first - for monitoring, and for finding a waiting spot that
+	nothing outside can reach any more.
+
+	The same view over the chain of active instances that #suspended is over their
+	executors, one level up"
+
+	^ self activeFlowInstances flatCollect: [ :each | each ownWaitingRegistry entries ]
+]
+
+{ #category : 'accessing' }
+FBFlowInstance >> ownWaitingRegistry [
+	"the directory of my own externally reachable waiting spots, or a fresh empty one
+	when nothing has registered here yet.
+
+	Deliberately answers a throwaway instead of creating and assigning one: assigning on
+	a read marks me dirty, and on an instance materialized in a read-only transaction
+	that signals SoilWriteOnReadOnlyTransaction - same hazard and same resolution as
+	#metadata and #scope. So nothing may register through this getter;
+	#registerWaitingToken:suspendedAt: is the path that creates the real one.
+
+	Mine only. #waitingEntryFor: is the view across the instances executing inside me,
+	the way #suspended is the view across their executors"
+
+	^ waitingRegistry ifNil: [ FBWaitingRegistry new ]
+]
+
+{ #category : 'accessing' }
 FBFlowInstance >> parallelExecutorFrom: aNode ifAbsent: aBlock [
 	"#executors is the live stack, so this can only ever answer a scope that is currently
 	open - never a finished executor from an earlier iteration of an enclosing parallel
@@ -406,6 +436,20 @@ FBFlowInstance >> pushExecutor: anExecutor [
 FBFlowInstance >> registerExpectedBranchCount: aCount forSplitId: aSplitId [
 	splitBranchCounts ifNil: [ splitBranchCounts := Dictionary new ].
 	splitBranchCounts at: aSplitId put: aCount
+]
+
+{ #category : 'executing' }
+FBFlowInstance >> registerWaitingToken: aToken suspendedAt: anObject [
+	"make one waiting spot of mine reachable from outside and answer its entry. Called
+	on request: being reachable is a release rather than something every wait gets, see
+	FBNode>>isExternallyResumable.
+
+	Registers here, on the instance whose executor holds the suspension - a wait inside
+	a sub flow therefore belongs to the child instance, which holds no reference back to
+	its caller. Reading it back goes through #waitingEntryFor:, which walks the chain"
+
+	waitingRegistry ifNil: [ waitingRegistry := FBWaitingRegistry new ].
+	^ waitingRegistry registerToken: aToken suspendedAt: anObject
 ]
 
 { #category : 'executing' }
@@ -488,6 +532,41 @@ FBFlowInstance >> suspended [
 	it is modelled inside a sub flow, since that is what #state reports as #waiting"
 
 	^ self activeExecutors flatCollect: [ :each | each suspended ]
+]
+
+{ #category : 'executing' }
+FBFlowInstance >> takeWaitingEntryFor: aCorrelationId [
+	"answer the externally reachable waiting spot under aCorrelationId and forget it, or
+	nil when no instance of my chain holds one. An unknown id and an already consumed one
+	give the same answer and neither is an error - that is what a resume addressed by
+	correlationId rests its idempotency on"
+
+	self activeFlowInstances do: [ :each |
+		| registry |
+		registry := each ownWaitingRegistry.
+		(registry entryFor: aCorrelationId) ifNotNil: [ :entry |
+			registry takeEntryFor: aCorrelationId.
+			^ entry ] ].
+	^ nil
+]
+
+{ #category : 'accessing' }
+FBFlowInstance >> waitingEntryFor: aCorrelationId [
+	"the externally reachable waiting spot under aCorrelationId, in me or in a flow
+	instance executing inside me, or nil. A pure read - it consumes nothing.
+
+	Walks the chain for the same reason #resumeWaitingAt:with: searches #activeExecutors:
+	a wait modelled inside a sub flow has to be reachable through the outermost instance,
+	which is the one an outward address names. A remote sub flow is not in this chain and
+	does not need to be - it runs as an instance of its own, under an address of its own.
+
+	Answering nil for an id registered elsewhere is the check that the waiting spot really
+	belongs to the addressed instance: the routing part of an address is useful redundancy,
+	not the truth"
+
+	self activeFlowInstances do: [ :each |
+		(each ownWaitingRegistry entryFor: aCorrelationId) ifNotNil: [ :entry | ^ entry ] ].
+	^ nil
 ]
 
 { #category : 'as yet unclassified' }
