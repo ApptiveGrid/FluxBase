@@ -78,11 +78,21 @@ FBBaseExecutor >> addWaiting: aNode withToken: aToken [
 	"aToken is remembered alongside the suspension rather than wrapped into it, so
 	#suspended stays a plain collection of whatever was suspended - callers read its
 	elements as transitions (#target/#source) or as nodes (#includes:/#remove:) all
-	over both FluxBase and ApptiveBase, and none of them has to change."
+	over both FluxBase and ApptiveBase, and none of them has to change.
+
+	One suspended object can hold several tokens, hence a queue per key rather than a
+	single slot. #suspended takes duplicates and the same object really is suspended
+	repeatedly: a parallel scope runs every iteration in one executor, so a
+	trigger-requiring node inside it suspends the very same transition once per
+	iteration. A single slot let the second suspension overwrite the first, and a
+	resume that finds no token builds an activation without a #splitId - see
+	FBBaseActivation>>waitForNode:withToken: and
+	FBParallelExecutorTest>>testEverySuspensionOfOneTransitionKeepsItsOwnToken."
 	suspended add: aNode.
 	aToken ifNotNil: [
 		suspendedTokens ifNil: [ suspendedTokens := IdentityDictionary new ].
-		suspendedTokens at: aNode put: aToken ]
+		(suspendedTokens at: aNode ifAbsentPut: [ OrderedCollection new ])
+			add: aToken ]
 ]
 
 { #category : 'services' }
@@ -212,7 +222,7 @@ FBBaseExecutor >> lastValueOf: aFBNode [
 
 { #category : 'accessing' }
 FBBaseExecutor >> takeTokenForSuspended: anObject [
-	"answer and forget the token stored for anObject, or nil if there is none - which
+	"answer and forget one token stored for anObject, or nil if there is none - which
 	is also the case for executors persisted before #suspendedTokens existed, hence
 	the nil guard rather than a lazy initialization (a lazy one would mark the executor
 	dirty on a pure read, see FBBaseActivation>>token).
@@ -220,10 +230,23 @@ FBBaseExecutor >> takeTokenForSuspended: anObject [
 	anObject is whatever #addWaiting:withToken: put into #suspended, and that is read
 	as a transition or as a node depending on the layer - ApptiveBase suspends
 	transitions - so there is no one class to name it after. The lookup is by identity,
-	so it has to be the very object that was suspended."
+	so it has to be the very object that was suspended.
 
+	Oldest first: the tokens of one object are a queue (see #addWaiting:withToken:) and
+	#suspended holds its suspensions in the order they happened, so a resume that takes
+	one out of #suspended has to take the matching one from the front here."
+
+	| tokens token |
 	suspendedTokens ifNil: [ ^ nil ].
-	^ suspendedTokens removeKey: anObject ifAbsent: [ nil ]
+	tokens := suspendedTokens at: anObject ifAbsent: [ ^ nil ].
+	"executors persisted while one token was kept per suspended object hold that token
+	itself rather than a queue of them"
+	(tokens isKindOf: Collection) ifFalse: [
+		suspendedTokens removeKey: anObject.
+		^ tokens ].
+	token := tokens removeFirst.
+	tokens ifEmpty: [ suspendedTokens removeKey: anObject ].
+	^ token
 ]
 
 { #category : 'accessing' }
