@@ -88,3 +88,58 @@ FBParallelExecutorTest >> testAndJoinInsideAParallelScopeReachesTheNodeBehindItO
 	released one"
 	self assert: splitIds asSet size equals: 2
 ]
+{ #category : 'as yet unclassified' }
+FBParallelExecutorTest >> testEverySuspensionOfOneTransitionKeepsItsOwnToken [
+	"a parallel scope runs all its iterations in a single executor (its #suspended holds
+	both suspensions below, the outer FBFlowExecutor holds none), so a trigger-requiring
+	node inside the scope suspends the very same transition object once per iteration.
+	FBBaseExecutor>>addWaiting:withToken: used to keep one token per suspended object,
+	so the second suspension overwrote the first: the first resume took the second
+	iteration's token and the second resume found none - and an activation resumed
+	without its token loses its #splitId, so a join behind it never completes (see
+	FBBaseActivation>>waitForNode:withToken:)"
+	| start fork body trigger end flow instance executor suspensions tokens |
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	body := fork addOutgoingNode: ((FBPluggableTask named: 'body') block: [ :act |
+		act value: act argument ]).
+	trigger := body addOutgoingNode: (FBTriggerTask named: 'trigger').
+	end := trigger addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+
+	"the scenario only holds if both iterations really suspend in one and the same
+	executor, on one and the same transition object"
+	self assert: (instance activeExecutors collect: [ :each | each suspended size ])
+		asArray equals: #( 0 2 ).
+	executor := instance activeExecutors detect: [ :each | each suspended notEmpty ].
+	suspensions := executor suspended asArray.
+	self assert: suspensions size equals: 2.
+	self assert: suspensions first == suspensions second.
+
+	tokens := suspensions collect: [ :each | executor takeTokenForSuspended: each ].
+	self deny: (tokens anySatisfy: [ :each | each isNil ]).
+	self assert: tokens asSet size equals: 2
+]
+
+{ #category : 'as yet unclassified' }
+FBParallelExecutorTest >> testTokenOfAnExecutorPersistedWithASingleTokenPerSuspensionIsStillFound [
+	"executors persisted while FBBaseExecutor>>addWaiting:withToken: kept one token per
+	suspended object hold that token itself where a queue of them is now expected, so
+	the reader has to tolerate both shapes - reaching into the ivar is the only way to
+	produce the old one"
+	| executor node token |
+	executor := FBParallelExecutor new
+		flowInstance: FBFlow simpleFlow newInstance;
+		node: (FBParallelNode named: 'p');
+		yourself.
+	node := FBTask named: 'waiting'.
+	token := FBToken new.
+	executor instVarNamed: 'suspendedTokens' put: (IdentityDictionary new
+		at: node put: token;
+		yourself).
+	self assert: (executor takeTokenForSuspended: node) == token.
+	"and it is forgotten, exactly as a token taken out of a queue is"
+	self assert: (executor takeTokenForSuspended: node) isNil
+]
