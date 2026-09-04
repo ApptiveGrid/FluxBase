@@ -65,11 +65,11 @@ FBWaitingRegistryTest >> testReadingTheRegistryDoesNotCreateOne [
 	"a getter that creates and assigns turns a read into a write. That marks the instance
 	dirty, and on an instance materialized in a read-only transaction it signals
 	SoilWriteOnReadOnlyTransaction - the failure that left a Zinc worker hanging without
-	ever naming a cause. See FBFlowInstance>>ownWaitingRegistry"
+	ever naming a cause. See FBFlowInstance>>waitingRegistry"
 	| instance |
 	instance := self waitingInstance.
 
-	instance ownWaitingRegistry.
+	instance waitingRegistry.
 	instance openWaitingEntries.
 	instance waitingEntryFor: 'never registered'.
 	instance takeWaitingEntryFor: 'never registered'.
@@ -95,8 +95,8 @@ FBWaitingRegistryTest >> testWaitingEntryInsideASubFlowIsFoundThroughTheOuterIns
 		suspendedAt: wait.
 
 	"the entry lives on the child, not on the caller"
-	self assert: child ownWaitingRegistry entries asArray equals: { entry }.
-	self assert: instance ownWaitingRegistry entries isEmpty.
+	self assert: child waitingRegistry entries asArray equals: { entry }.
+	self assert: instance waitingRegistry entries isEmpty.
 	"and is reachable through the outer instance all the same"
 	self assert: (instance waitingEntryFor: entry correlationId) identicalTo: entry.
 	self assert: instance openWaitingEntries asArray equals: { entry }.

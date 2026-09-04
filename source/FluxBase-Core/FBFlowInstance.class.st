@@ -377,24 +377,7 @@ FBFlowInstance >> openWaitingEntries [
 	The same view over the chain of active instances that #suspended is over their
 	executors, one level up"
 
-	^ self activeFlowInstances flatCollect: [ :each | each ownWaitingRegistry entries ]
-]
-
-{ #category : 'accessing' }
-FBFlowInstance >> ownWaitingRegistry [
-	"the directory of my own externally reachable waiting spots, or a fresh empty one
-	when nothing has registered here yet.
-
-	Deliberately answers a throwaway instead of creating and assigning one: assigning on
-	a read marks me dirty, and on an instance materialized in a read-only transaction
-	that signals SoilWriteOnReadOnlyTransaction - same hazard and same resolution as
-	#metadata and #scope. So nothing may register through this getter;
-	#registerWaitingToken:suspendedAt: is the path that creates the real one.
-
-	Mine only. #waitingEntryFor: is the view across the instances executing inside me,
-	the way #suspended is the view across their executors"
-
-	^ waitingRegistry ifNil: [ FBWaitingRegistry new ]
+	^ self activeFlowInstances flatCollect: [ :each | each waitingRegistry entries ]
 ]
 
 { #category : 'accessing' }
@@ -543,7 +526,7 @@ FBFlowInstance >> takeWaitingEntryFor: aCorrelationId [
 
 	self activeFlowInstances do: [ :each |
 		| registry |
-		registry := each ownWaitingRegistry.
+		registry := each waitingRegistry.
 		(registry entryFor: aCorrelationId) ifNotNil: [ :entry |
 			registry takeEntryFor: aCorrelationId.
 			^ entry ] ].
@@ -565,8 +548,25 @@ FBFlowInstance >> waitingEntryFor: aCorrelationId [
 	not the truth"
 
 	self activeFlowInstances do: [ :each |
-		(each ownWaitingRegistry entryFor: aCorrelationId) ifNotNil: [ :entry | ^ entry ] ].
+		(each waitingRegistry entryFor: aCorrelationId) ifNotNil: [ :entry | ^ entry ] ].
 	^ nil
+]
+
+{ #category : 'accessing' }
+FBFlowInstance >> waitingRegistry [
+	"the directory of my own externally reachable waiting spots, or a fresh empty one
+	when nothing has registered here yet.
+
+	Deliberately answers a throwaway instead of creating and assigning one: assigning on
+	a read marks me dirty, and on an instance materialized in a read-only transaction
+	that signals SoilWriteOnReadOnlyTransaction - same hazard and same resolution as
+	#metadata and #scope. So nothing may register through this getter;
+	#registerWaitingToken:suspendedAt: is the path that creates the real one.
+
+	Mine only. #waitingEntryFor: is the view across the instances executing inside me,
+	the way #suspended is the view across their executors"
+
+	^ waitingRegistry ifNil: [ FBWaitingRegistry new ]
 ]
 
 { #category : 'as yet unclassified' }
