@@ -85,7 +85,7 @@ FBActivation >> returnValue: anInteger [
 
 { #category : 'as yet unclassified' }
 FBActivation >> suspend [
-	state := #waiting.
+	self waiting.
 	executor addWaiting: node
 ]
 

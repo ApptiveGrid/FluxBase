@@ -41,8 +41,15 @@ before this: for those #parent is nil and FBBaseActivation>>sourceNode falls bac
 to resolving the old id. Nothing writes them any more, and they can be dropped
 once no such tokens are left in any store.
 
-Not all of me is wired up. Only #splitId and #parent currently drive decisions.
-#scope is not populated by anything yet, and #value, #state and #metadata have no
+My #state says whether this strand is running or parked: #ready or #waiting, and
+#cancelled once cancellation exists. There is no #done - a strand ends by my
+disappearing, not by my carrying a state that says so. A wait outlives the step that
+started it, which is why it is mine and not the activation's; the three step
+statements - #created, #done, #error - stay on FBBaseActivation, and its #state
+answers #waiting off me.
+
+Not all of me is wired up. Only #splitId, #parent and #state currently drive
+decisions. #scope is not populated by anything yet, and #value and #metadata have no
 readers at all - the engine keeps the current value on the activation, not on me.
 "
 Class {
@@ -151,6 +158,13 @@ FBToken >> splitId: anObject [
 	splitId := anObject
 ]
 
+{ #category : 'testing' }
+FBToken >> isWaiting [
+	"am I parked at a wait? Read by FBBaseActivation>>state, which reports #waiting for
+	the step that parked me - see my class comment"
+	^ state = #waiting
+]
+
 { #category : 'as yet unclassified' }
 FBToken >> state [
 	^ state
@@ -159,6 +173,11 @@ FBToken >> state [
 { #category : 'as yet unclassified' }
 FBToken >> state: aSymbol [
 	state := aSymbol
+]
+
+{ #category : 'accessing' }
+FBToken >> waiting [
+	state := #waiting
 ]
 
 { #category : 'as yet unclassified' }

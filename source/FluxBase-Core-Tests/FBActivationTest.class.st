@@ -111,3 +111,46 @@ FBActivationTest >> testTokenGetterDoesNotPersistDefaultForActivationsWithoutASt
 	self assert: secondRead notNil.
 	self deny: firstRead id equals: secondRead id
 ]
+
+{ #category : 'as yet unclassified' }
+FBActivationTest >> testWaitingIsCarriedByTheTokenAndReportedByTheActivation [
+	"a wait outlives the step that started it, so it is the token's state, not the
+	activation's - see FBToken. The activation still reports #waiting, so nothing
+	reading its state (down to AGActivationPresenter's REST payload) sees a change"
+	| flow waitNode instance activation |
+	flow := FBFlow simpleWaitFlow.
+	waitNode := flow start outgoing first target.
+	instance := flow newInstance.
+	instance executeWith: 4.
+	activation := instance activations detect: [ :each | each node == waitNode ].
+	self assert: activation token isWaiting.
+	self assert: activation state equals: #waiting.
+	"and the field the activation kept holds one of the three step statements instead"
+	self assert: (activation instVarNamed: 'state') equals: #created
+]
+
+{ #category : 'as yet unclassified' }
+FBActivationTest >> testWaitingOfAnActivationPersistedWithoutATokenStaysInItsOwnField [
+	"activations persisted before the token ivar existed have token = nil, and #token
+	answers a fresh throwaway for them rather than storing one (see #token). A mark put
+	on that throwaway would be lost, so for those the old field takes it"
+	| activation |
+	activation := FBActivation new.
+	activation token: nil.
+	activation waiting.
+	self assert: (activation instVarNamed: 'state') equals: #waiting.
+	self assert: activation state equals: #waiting
+]
+
+{ #category : 'as yet unclassified' }
+FBActivationTest >> testFinishedActivationPersistedWithoutATokenDoesNotReportItselfReady [
+	"the reason #state is not a plain delegation to the token: #token answers a fresh
+	throwaway for these, and a fresh token is #ready - a finished activation would
+	report itself as ready to run"
+	| activation |
+	activation := FBActivation new.
+	activation token: nil.
+	activation done.
+	self assert: activation state equals: #done.
+	self assert: activation token state equals: #ready
+]

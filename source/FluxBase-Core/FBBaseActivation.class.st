@@ -41,6 +41,19 @@ FBBaseActivation >> done [
 ]
 
 { #category : 'as yet unclassified' }
+FBBaseActivation >> waiting [
+	"mark the strand I am on as parked. On my token rather than in my own field,
+	because a wait outlives the step that started it - see #state and FBToken.
+
+	Written through the ivar and not through #token: that getter answers a fresh
+	throwaway token when the ivar is nil (activations persisted before it existed), so
+	the mark would be dropped on exactly those. For them the old field is still the
+	only place it fits, and #state reads it back from there."
+	token ifNil: [ ^ state := #waiting ].
+	token waiting
+]
+
+{ #category : 'as yet unclassified' }
 FBBaseActivation >> errored [ 
 	state := #error
 ]
@@ -170,6 +183,16 @@ FBBaseActivation >> shouldFollowTransition: aTransition with: value [
 
 { #category : 'accessing' }
 FBBaseActivation >> state [
+	"#created, #done and #error are statements about me - a step - and live in my own
+	field. #waiting is not: a wait outlives the step that started it, so it lives on my
+	token (see FBToken) and is read back from there.
+
+	Deliberately not a plain delegation to #token state. #token answers a fresh
+	throwaway token for activations persisted before that ivar existed, and a fresh
+	token is #ready - every one of those finished activations would report itself
+	ready. The ivar is the fallback for them, and #waiting is the only value it no
+	longer receives."
+	token ifNotNil: [ token isWaiting ifTrue: [ ^ #waiting ] ].
 	^ state
 ]
 
@@ -232,6 +255,6 @@ FBBaseActivation >> waitForNode: aNode withToken: aToken [
 	token that activation loses its #splitId - a form suspended behind a split gateway
 	would then reach a downstream join under a different split id and the join could
 	never complete."
-	state := #waiting.
+	self waiting.
 	executor addWaiting: aNode withToken: aToken
 ]
