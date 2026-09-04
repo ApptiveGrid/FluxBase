@@ -22,6 +22,12 @@ FBIdGeneratorTest >> tearDown [
 
 { #category : 'tests' }
 FBIdGeneratorTest >> testCurrentDefaultsToAUUIDGenerator [
+	"The default is only observable when nothing has registered a generator yet. An
+	integrated image (apptive-base) installs its own AGIdGenerator at load time, so the
+	standalone condition has to be established here instead of assumed. setUp/tearDown
+	keep and restore whatever the image had."
+
+	FBIdGenerator current: nil.
 	self assert: (FBIdGenerator current isKindOf: FBUUIDGenerator)
 ]
 
