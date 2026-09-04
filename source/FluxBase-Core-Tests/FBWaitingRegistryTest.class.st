@@ -26,25 +26,6 @@ FBWaitingRegistryTest >> flowWaitingForever [
 	^ FBFlow new start: start
 ]
 
-{ #category : 'private' }
-FBWaitingRegistryTest >> tokenWaitingAt: aNode in: anInstance [
-	"the token of the activation parked on aNode. A condition wait stores no token for
-	its suspension, so the activation standing on the node is where the parked strand is
-	to be had - and it is the token the wait would have to hand on"
-	^ (anInstance activations detect: [ :each | each node == aNode ]) token
-]
-
-{ #category : 'private' }
-FBWaitingRegistryTest >> waitingInstance [
-	"an instance parked on the single wait of #flowWaitingForever"
-	| instance |
-	instance := self flowWaitingForever newInstance.
-	instance executeWith: 1.
-	self assert: instance state equals: #waiting.
-	self assert: instance suspended size equals: 1.
-	^ instance
-]
-
 { #category : 'tests' }
 FBWaitingRegistryTest >> testASuspensionWithoutRegistrationHasNoEntry [
 	"the registry is a selection out of #suspended and not a mirror of it: a condition
@@ -186,4 +167,23 @@ FBWaitingRegistryTest >> testWaitingRegistryResolvesCorrelationIdToToken [
 	self assert: entry suspension identicalTo: wait.
 	self assert: (instance suspended includes: entry suspension).
 	self assert: instance openWaitingEntries asArray equals: { entry }
+]
+
+{ #category : 'private' }
+FBWaitingRegistryTest >> tokenWaitingAt: aNode in: anInstance [
+	"the token of the activation parked on aNode. A condition wait stores no token for
+	its suspension, so the activation standing on the node is where the parked strand is
+	to be had - and it is the token the wait would have to hand on"
+	^ (anInstance activations detect: [ :each | each node == aNode ]) token
+]
+
+{ #category : 'private' }
+FBWaitingRegistryTest >> waitingInstance [
+	"an instance parked on the single wait of #flowWaitingForever"
+	| instance |
+	instance := self flowWaitingForever newInstance.
+	instance executeWith: 1.
+	self assert: instance state equals: #waiting.
+	self assert: instance suspended size equals: 1.
+	^ instance
 ]
