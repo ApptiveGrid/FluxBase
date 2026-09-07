@@ -308,7 +308,9 @@ FBNode >> isExternallyResumable [
 	than granted to everything that waits.
 
 	Sits next to #requiresTrigger, the other question asked of a node around a
-	transition into it. Nothing consults this yet"
+	transition into it. Read by FBBaseActivation>>waitForNode:withToken: - through
+	FBTransition>>waitingNode / FBNode>>waitingNode, since a suspension is a transition
+	in one case and a node in the other"
 
 	^ false
 ]
@@ -429,6 +431,14 @@ FBNode >> resumeIn: anExecutor withToken: aToken value: aValue [
 	activation := anExecutor activationOf: self.
 	activation value: aValue.
 	activation followAllOutgoing
+]
+
+{ #category : 'accessing' }
+FBNode >> waitingNode [
+	"I am the node that waits while I am suspended: a condition wait parks its own node,
+	not a transition into it. See FBTransition>>waitingNode for the other case and for
+	who asks"
+	^ self
 ]
 
 { #category : 'initialization' }

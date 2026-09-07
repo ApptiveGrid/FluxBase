@@ -244,17 +244,29 @@ FBBaseActivation >> transitionMatches: aTransition [
 ]
 
 { #category : 'as yet unclassified' }
-FBBaseActivation >> waitForNode: aNode [
-	self waitForNode: aNode withToken: nil
-]
+FBBaseActivation >> waitForNode: aSuspension withToken: aToken [
+	"park aSuspension - a transition into a trigger-requiring node, or a node that stopped
+	inside its own execution - and make the wait reachable from outside if its node asks
+	for it.
 
-{ #category : 'as yet unclassified' }
-FBBaseActivation >> waitForNode: aNode withToken: aToken [
-	"aToken is the token the target would have been activated with. It has to be kept
+	aToken is the token the waiting node would have been activated with. It has to be kept
 	across the suspension: whoever resumes builds a fresh activation, and without the
 	token that activation loses its #splitId - a form suspended behind a split gateway
 	would then reach a downstream join under a different split id and the join could
-	never complete."
+	never complete.
+
+	The one place a suspension is created, which is why the registration sits here: the
+	token is at hand, and #flowInstance is the instance whose executor holds the
+	suspension - for a wait inside a sub flow that is the child, which is where
+	FBWaitingRegistry wants the entry. Being reachable is asked of the node
+	(FBNode>>isExternallyResumable, false by default) rather than granted to everything
+	that waits, so a condition wait on a date still gets no entry.
+
+	There used to be a one-argument #waitForNode: passing nil for the token. It lost its
+	last caller when the condition wait started handing over its own token, and is gone:
+	a path that parks without a token is a path that produces an entry with no #splitId."
 	self waiting.
-	executor addWaiting: aNode withToken: aToken
+	executor addWaiting: aSuspension withToken: aToken.
+	aSuspension waitingNode isExternallyResumable ifTrue: [
+		self flowInstance registerWaitingToken: aToken suspendedAt: aSuspension ]
 ]

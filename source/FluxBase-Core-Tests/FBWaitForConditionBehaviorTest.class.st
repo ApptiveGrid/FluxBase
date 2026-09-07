@@ -38,8 +38,9 @@ FBWaitForConditionBehaviorTest >> testResumingAConditionWaitBehindASplitComplete
 	the way a suspended flow form's does: resuming a node takes the suspended activation
 	back up (FBNode>>resumeIn:withToken:value:) instead of minting a fresh one, so
 	its own token - #splitId included - is still attached and there is nothing to
-	restore. This is what makes the missing suspension token of a condition wait
-	harmless today, see #testAConditionWaitStoresNoTokenForItsSuspension.
+	restore - the token it stores for its suspension
+	(#testAConditionWaitStoresItsOwnTokenForItsSuspension) is what an entry in the
+	waiting registry needs, not what this resume needs.
 
 	A resume that mints a fresh activation instead, the way ApptiveBase resumes a flow
 	form, would have to carry the token: measured on a flow shaped like this one, a
@@ -84,19 +85,18 @@ FBWaitForConditionBehaviorTest >> testResumingAConditionWaitBehindASplitComplete
 ]
 
 { #category : 'tests' }
-FBWaitForConditionBehaviorTest >> testAConditionWaitStoresNoTokenForItsSuspension [
-	"unlike a trigger-requiring node, whose transition is suspended together with the
-	token it would have been activated with, a condition wait suspends through the
-	single-argument FBBaseActivation>>waitForNode: - which passes withToken: nil. So
-	#takeTokenForSuspended: answers nil here in every case, not because a second
-	suspension overwrote a first (see
-	FBParallelExecutorTest>>testEverySuspensionOfOneTransitionKeepsItsOwnToken) but
-	because nothing was ever put there.
+FBWaitForConditionBehaviorTest >> testAConditionWaitStoresItsOwnTokenForItsSuspension [
+	"a condition wait hands its token to the suspension like a trigger-requiring node
+	does, and the token it hands over is its own - the strand it is standing on - not a
+	child token, because resuming takes this very activation back up rather than spawning
+	a new one.
 
-	Harmless as long as resuming takes the suspended activation back up rather than
-	minting a fresh one - #testResumingAConditionWaitBehindASplitCompletesTheJoin is
-	the guard for that. Once a condition wait does store its token, this test is the
-	one to change."
+	It used to pass withToken: nil through a one-argument #waitForNode:, which was
+	harmless while resuming only ever took the parked activation back up
+	(#testResumingAConditionWaitBehindASplitCompletesTheJoin is the guard for that). It
+	stopped being harmless once a waiting spot could be registered for resuming from
+	outside: FBWaitingEntry has to carry the parked strand, and this is the only place
+	that knows it."
 	| flow waitNode instance executor |
 	flow := FBFlow simpleWaitFlow.
 	waitNode := flow start outgoing first target.
@@ -105,5 +105,7 @@ FBWaitForConditionBehaviorTest >> testAConditionWaitStoresNoTokenForItsSuspensio
 
 	self assert: instance suspended asArray equals: { waitNode }.
 	executor := instance activeExecutors detect: [ :each | each suspended notEmpty ].
-	self assert: (executor takeTokenForSuspended: waitNode) isNil
+	self
+		assert: (executor takeTokenForSuspended: waitNode)
+		identicalTo: (instance activations detect: [ :each | each node == waitNode ]) token
 ]

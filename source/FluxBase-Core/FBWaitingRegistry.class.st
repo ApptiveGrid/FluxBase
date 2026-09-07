@@ -32,8 +32,10 @@ suspension is: the child holds no reference back to its caller. Resolving from
 outside therefore walks the chain of active instances - FBFlowInstance>>waitingEntryFor:
 does that - which is the same two-level split #suspended already has, one level up.
 
-Nothing in the engine creates entries yet. I am additive, the way FBJoinState was
-before the joins were wired to it.
+Entries are created by FBBaseActivation>>waitForNode:withToken:, for every wait whose
+node answers FBNode>>isExternallyResumable - which nothing in FluxBase-Core itself
+does, so in this package I stay empty outside of tests. ApptiveGrid's flow form is the
+first real node to answer true.
 "
 Class {
 	#name : 'FBWaitingRegistry',
