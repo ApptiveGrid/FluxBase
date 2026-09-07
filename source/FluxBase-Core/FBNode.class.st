@@ -413,6 +413,24 @@ FBNode >> resultTransition: aSymbol [
         yourself
 ]
 
+{ #category : 'executing' }
+FBNode >> resumeIn: anExecutor withToken: aToken value: aValue [
+	"I was activated and then parked inside my own execution - a condition that did not
+	hold (FBWaitForConditionBehavior). My activation is still standing and still carries
+	its own token, so aToken has nothing to restore here. The impulse is my result rather
+	than my input: it becomes my activation's #value and my outgoing transitions are
+	followed, the way the wait would have gone on had the condition held.
+
+	Taking the parked activation back up rather than minting a fresh one is what keeps
+	the branch identity across a condition wait - see
+	FBWaitForConditionBehaviorTest>>testResumingAConditionWaitBehindASplitCompletesTheJoin"
+
+	| activation |
+	activation := anExecutor activationOf: self.
+	activation value: aValue.
+	activation followAllOutgoing
+]
+
 { #category : 'initialization' }
 FBNode >> setFlow: aFlow [
 	flow := aFlow
