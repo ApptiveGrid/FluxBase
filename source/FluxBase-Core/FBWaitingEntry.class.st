@@ -27,7 +27,9 @@ authoritative for it and I hold no copy, so there is no duplicate to keep in ste
 across the two stores - and a schedule that fires and finds nobody waiting is
 allowed to lapse silently.
 
-Nothing in the engine creates me yet.
+I am created by FBBaseActivation>>waitForNode:withToken: when the waiting node asks to
+be reachable, which is also where #token comes from - that is the one place that knows
+the strand being parked.
 "
 Class {
 	#name : 'FBWaitingEntry',

@@ -17,6 +17,15 @@ Class {
 }
 
 { #category : 'testing' }
+FBTriggerTask >> isExternallyResumable [
+	"a form has a waker outside the image, so the node I stand in for answers both hooks.
+	They are independent all the same - FBExternalWait answers only this one - and a
+	trigger-requiring node that nothing outside can address would answer false here"
+
+	^ true
+]
+
+{ #category : 'testing' }
 FBTriggerTask >> requiresTrigger [
 
 	^ true

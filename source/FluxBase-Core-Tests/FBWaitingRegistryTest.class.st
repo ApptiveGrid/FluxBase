@@ -26,15 +26,105 @@ FBWaitingRegistryTest >> flowWaitingForever [
 	^ FBFlow new start: start
 ]
 
+{ #category : 'private' }
+FBWaitingRegistryTest >> flowWaitingForeverFromOutside [
+	"like #flowWaitingForever, but the wait answers FBNode>>isExternallyResumable - so the
+	engine registers it and the entry has to carry the parked activation's own token"
+	| start wait |
+	start := FBStartEvent new.
+	wait := start addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	wait addOutgoingNode: FBEndEvent new.
+	^ FBFlow new start: start
+]
+
+{ #category : 'private' }
+FBWaitingRegistryTest >> flowWithExternalTrigger [
+	"a flow shaped start -> trigger-requiring, externally reachable task -> end. The
+	transition into the task is what parks, so its waiting spot is transition-shaped"
+	| start trigger |
+	start := FBStartEvent new.
+	trigger := start addOutgoingNode: (FBTriggerTask named: 'trigger').
+	trigger addOutgoingNode: FBEndEvent new.
+	^ FBFlow new start: start
+]
+
+{ #category : 'private' }
+FBWaitingRegistryTest >> flowWaitingForeverFromOutside [
+	"like #flowWaitingForever, but the wait answers FBNode>>isExternallyResumable - so the
+	engine registers it and the entry has to carry the parked activation's own token"
+	| start wait |
+	start := FBStartEvent new.
+	wait := start addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	wait addOutgoingNode: FBEndEvent new.
+	^ FBFlow new start: start
+]
+
+{ #category : 'private' }
+FBWaitingRegistryTest >> flowWithExternalTrigger [
+	"a flow shaped start -> trigger-requiring, externally reachable task -> end. The
+	transition into the task is what parks, so its waiting spot is transition-shaped"
+	| start trigger |
+	start := FBStartEvent new.
+	trigger := start addOutgoingNode: (FBTriggerTask named: 'trigger').
+	trigger addOutgoingNode: FBEndEvent new.
+	^ FBFlow new start: start
+]
+
 { #category : 'tests' }
 FBWaitingRegistryTest >> testASuspensionWithoutRegistrationHasNoEntry [
-	"the registry is a selection out of #suspended and not a mirror of it: a condition
-	wait has no waker outside the image and gets no entry unless one is asked for"
+	"the registry is a selection out of #suspended and not a mirror of it: this condition
+	wait has no waker outside the image, answers FBNode>>isExternallyResumable with false,
+	and therefore gets no entry even though the engine now registers on its own. Being
+	reachable stays something the node asks for - FBExternalWait is the counterpart"
 	| instance |
 	instance := self waitingInstance.
 
 	self assert: instance suspended size equals: 1.
 	self assert: instance openWaitingEntries isEmpty
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testAnExternallyResumableConditionWaitRegistersWithItsToken [
+	"the condition wait hands its token to the suspension now, so its entry carries the
+	parked strand rather than nil. That was the condition under which the token could be
+	kept on FBToken at all (see the #waiting rebuild of 2026-09-04): an entry without a
+	token produces, on the day something resumes it by minting a fresh activation, an
+	activation with no #splitId and a join behind it that never releases"
+	| instance wait entry |
+	instance := self flowWaitingForeverFromOutside newInstance.
+	instance executeWith: 1.
+	wait := instance suspended first.
+
+	self assert: instance openWaitingEntries size equals: 1.
+	entry := instance openWaitingEntries first.
+
+	self assert: entry suspension identicalTo: wait.
+	self assert: entry token identicalTo: (self tokenWaitingAt: wait in: instance).
+	self assert: entry token notNil
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testAnExternallyResumableTriggerRegistersItsTransition [
+	"a trigger-requiring node parks the transition into it, not itself - so the entry's
+	suspension is that transition, and its token is the one the target would have been
+	activated with. The waiting node is reached through FBTransition>>waitingNode, which
+	is also what was asked to decide whether to register at all"
+	| instance entry holder |
+	instance := self flowWithExternalTrigger newInstance.
+	instance executeWith: 1.
+
+	self assert: instance suspended size equals: 1.
+	self assert: instance openWaitingEntries size equals: 1.
+	entry := instance openWaitingEntries first.
+
+	self assert: entry suspension identicalTo: instance suspended first.
+	self assert: entry suspension waitingNode name equals: 'trigger'.
+	self assert: entry token notNil.
+	"the same token the executor kept alongside the suspension"
+	holder := instance activeExecutors detect: [ :each | each suspended notEmpty ].
+	self assert: (holder takeTokenForSuspended: entry suspension) identicalTo: entry token.
+	"and the target really was not activated"
+	self deny: (instance activations anySatisfy: [ :each | each node == entry suspension target ])
 ]
 
 { #category : 'tests' }
@@ -75,6 +165,24 @@ FBWaitingRegistryTest >> testReadingTheRegistryDoesNotCreateOne [
 	instance takeWaitingEntryFor: 'never registered'.
 
 	self assert: (instance instVarNamed: 'waitingRegistry') isNil
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testResumingClearsTheTokenKeptForTheSuspension [
+	"resuming takes the token out of the executor's bookkeeping as well, so nothing is
+	left behind for a suspension that is over. Only measurable since the condition wait
+	stores a token at all - see #testAnExternallyResumableConditionWaitRegistersWithItsToken
+	for that it is there beforehand; asking here would consume it and prove nothing"
+	| instance wait holder |
+	instance := self flowWaitingForeverFromOutside newInstance.
+	instance executeWith: 1.
+	wait := instance suspended first.
+	holder := instance activeExecutors detect: [ :each | each suspended notEmpty ].
+
+	instance resumeWaitingAt: wait with: 7.
+
+	self assert: (holder takeTokenForSuspended: wait) isNil.
+	self assert: (holder instVarNamed: 'suspendedTokens') isEmpty
 ]
 
 { #category : 'tests' }
@@ -129,6 +237,31 @@ FBWaitingRegistryTest >> testSignalBehindASplitCompletesTheJoin [
 	two arrivals apart and releases neither, while #state still reports #done"
 	self assert: (instance activations anySatisfy: [ :each | each node == end ]).
 	self assert: instance state equals: #done
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testSignalReachesAWaitTheEngineRegistered [
+	"the whole way through, with nothing registered by hand: the wait makes itself
+	reachable, the address is read off the instance, and signalling it runs the flow to
+	its end. Until the engine registered, #signal:with: was only reachable from a test
+	that had built its own entry"
+	| instance entry |
+	instance := self flowWithExternalTrigger newInstance.
+	instance executeWith: 1.
+
+	self assert: instance openWaitingEntries size equals: 1.
+	entry := instance openWaitingEntries first.
+
+	self assert: (instance signal: entry correlationId with: 7).
+	instance execute.
+
+	self assert: (instance activations
+		detect: [ :each | each node == entry suspension target ]) argument equals: 7.
+	self assert: (instance activations anySatisfy: [ :each | each node isKindOf: FBEndEvent ]).
+	self assert: instance state equals: #done.
+	"and the address is spent - a second delivery of the same impulse does nothing"
+	self deny: (instance signal: entry correlationId with: 99).
+	self assert: instance openWaitingEntries isEmpty
 ]
 
 { #category : 'tests' }

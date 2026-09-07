@@ -121,6 +121,18 @@ FBTransition >> resumeIn: anExecutor withToken: aToken value: aValue [
 ]
 
 { #category : 'accessing' }
+FBTransition >> waitingNode [
+	"the node that waits while I am suspended: my target, which was not activated because
+	it requires a trigger. Counterpart of FBNode>>waitingNode - #suspended holds both
+	kinds of waiting spot, so whoever asks something of the waiting node has to ask the
+	suspension for it rather than test what it is. Two askers so far:
+	FBBaseActivation>>waitForNode:withToken:, which asks it whether the wait should be
+	reachable from outside, and ApptiveGrid, which reads it off an entry's #suspension to
+	build a form link (see FBWaitingEntry)"
+	^ target
+]
+
+{ #category : 'accessing' }
 FBTransition >> source [
 	^ source
 ]
