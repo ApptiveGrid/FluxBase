@@ -442,15 +442,18 @@ FBFlowInstance >> resumeWaitingAt: aNode with: aValue [
 	be resumed through the outermost instance. resuming is addressed by node identity
 	alone, so a node waiting in more than one instance of a recursive sub flow call
 	resolves to the outermost one - the same ambiguity the node already has across the
-	iterations of a parallel scope"
-	| holder activation |
+	iterations of a parallel scope. That ambiguity is why this stays the local variant
+	and is not developed further: naming a waiting spot is what #signal:with: and a
+	correlationId are for.
+
+	Goes on through the same #resume:withToken:value: that #signal:with: uses, so that
+	how a suspension continues is decided in one place. No token to hand over here -
+	a node addressed by identity carries whatever its standing activation has"
+	| holder |
 	holder := self activeExecutors
 		detect: [ :each | each suspended includes: aNode ]
 		ifNone: [ ^ FBNodeNotWaiting signal: 'node is not currently waiting' ].
-	activation := holder activationOf: aNode.
-	holder suspended remove: aNode.
-	activation value: aValue.
-	activation followAllOutgoing.
+	holder resume: aNode withToken: nil value: aValue
 ]
 
 { #category : 'finalization' }
@@ -479,6 +482,38 @@ FBFlowInstance >> scope [
 { #category : 'accessing' }
 FBFlowInstance >> scope: aFBScope [
     scope := aFBScope
+]
+
+{ #category : 'executing' }
+FBFlowInstance >> signal: aCorrelationId with: aValue [
+	"the one entrance for an impulse reaching a waiting spot of mine from outside -
+	a submitted form, a fired schedule, a remote callback. Resolve the address, hand
+	aValue to the waiting spot it names, and answer whether anything was resumed.
+
+	An unknown correlationId and an already consumed one both answer false and change
+	nothing. That is the whole idempotency guarantee - a double submit, a redelivery out
+	of the event log, a schedule firing at a wait that is long gone - and it rests on
+	#takeWaitingEntryFor: forgetting the entry here, before anything is advanced.
+
+	Knows nothing about what kind of impulse this is: the waiting spot decides how it
+	goes on, see FBBaseExecutor>>resume:withToken:value:.
+
+	Does not run the flow on afterwards, the same way #resumeWaitingAt:with: does not -
+	the caller decides how far to step. #resumeWaitingAt:with: stays for the local case
+	of addressing a wait by node, but is not developed further: node identity cannot
+	name a waiting spot, which is what a correlationId is for"
+
+	| entry holder |
+	entry := self takeWaitingEntryFor: aCorrelationId.
+	entry ifNil: [ ^ false ].
+	"an entry whose suspension is no longer open - a node-addressed resume took it in
+	the meantime, which does not clear the registry - is treated like a consumed id
+	rather than as an error, so that the two ways in cannot make each other fail"
+	holder := self activeExecutors
+		detect: [ :each | each suspended includes: entry suspension ]
+		ifNone: [ ^ false ].
+	holder resume: entry suspension withToken: entry token value: aValue.
+	^ true
 ]
 
 { #category : 'accessing' }

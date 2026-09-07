@@ -100,6 +100,26 @@ FBTransition >> resultName: aSymbol [
     resultName := aSymbol
 ]
 
+{ #category : 'executing' }
+FBTransition >> resumeIn: anExecutor withToken: aToken value: aValue [
+	"I was suspended instead of followed, because my target only proceeds on an explicit
+	trigger (FBBaseActivation>>followTransition:withToken:). My target therefore has no
+	activation yet, and the impulse is its input: it gets a fresh activation carrying
+	aValue as its argument and is activated now, exactly as FBFlowExecutor>>step would
+	have done had no trigger been required.
+
+	aToken is the token my target would have been activated with. Without it the fresh
+	activation carries a default token with no #splitId, and a join behind me opens a
+	second FBJoinState that never reaches its expected count - see
+	FBBaseActivation>>waitForNode:withToken:"
+
+	| activation |
+	activation := anExecutor newActivation: self.
+	aToken ifNotNil: [ :token | activation token: token ].
+	activation argument: aValue.
+	anExecutor activate: activation
+]
+
 { #category : 'accessing' }
 FBTransition >> source [
 	^ source

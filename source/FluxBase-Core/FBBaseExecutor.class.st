@@ -271,6 +271,26 @@ FBBaseExecutor >> popThenResume: aBlock [
 		parent resumeAfter: self ]
 ]
 
+{ #category : 'executing' }
+FBBaseExecutor >> resume: aSuspension withToken: aToken value: aValue [
+	"take one suspension out of my bookkeeping and let it go on with aValue.
+
+	How it goes on is aSuspension's own answer, not a test made here: #suspended holds
+	transitions and nodes side by side by design (see #addWaiting:withToken:), and the
+	two continue differently - a transition's target was never activated and gets a
+	fresh activation, a node that parked inside its own execution still has one. So
+	FBTransition and FBNode each implement #resumeIn:withToken:value:.
+
+	The token to go on with comes from the caller - the registry entry holds it - and
+	not from #takeTokenForSuspended:, which cannot tell two suspensions of the same
+	object apart. #takeTokenForSuspended: is still sent, to shorten the token queue by
+	the one suspension that is no longer open"
+
+	suspended remove: aSuspension.
+	self takeTokenForSuspended: aSuspension.
+	aSuspension resumeIn: self withToken: aToken value: aValue
+]
+
 { #category : 'as yet unclassified' }
 FBBaseExecutor >> resumeAfter: anExecutor [
 	

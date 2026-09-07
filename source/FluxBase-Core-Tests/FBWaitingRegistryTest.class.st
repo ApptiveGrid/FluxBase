@@ -78,6 +78,132 @@ FBWaitingRegistryTest >> testReadingTheRegistryDoesNotCreateOne [
 ]
 
 { #category : 'tests' }
+FBWaitingRegistryTest >> testSignalBehindASplitCompletesTheJoin [
+	"the branch identity has to survive an impulse from outside. A trigger-requiring node
+	has no activation while the transition into it is parked, so #signal:with: mints one -
+	and it has to carry the token the registry entry holds. Without it the fresh
+	activation's default token has no #splitId, the join behind it opens a second
+	FBJoinState, each of the two holds one arrival, neither reaches its #expected of two -
+	and the instance reports #done with everything behind the join left undone. Reaching
+	the end node is therefore what discriminates here; #atEnd and #state do not.
+
+	The counterpart of FBWaitForConditionBehaviorTest>>
+	testResumingAConditionWaitBehindASplitCompletesTheJoin, which measures the other kind
+	of waiting spot - the one whose activation is still standing while it waits"
+	| start split trigger other join end flow instance holder transition token entry |
+	start := FBStartEvent new.
+	split := FBAndSplit named: 'split'.
+	trigger := FBTriggerTask named: 'trigger'.
+	other := FBTask named: 'other'.
+	join := FBAndJoin named: 'join'.
+	end := FBEndEvent new.
+	start --> split.
+	split --> trigger --> join.
+	split --> other --> join.
+	join --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 42.
+
+	"the scenario only holds if the trigger branch really parks, and parks a transition"
+	self assert: instance state equals: #waiting.
+	self assert: instance suspended asArray equals: { trigger incoming first }.
+	transition := instance suspended first.
+	holder := instance activeExecutors detect: [ :each | each suspended notEmpty ].
+	"the engine registers no waiting spot yet, so the entry is made here - with the very
+	token the waiting spot laid down for its suspension"
+	token := holder takeTokenForSuspended: transition.
+	self assert: token notNil.
+	entry := instance registerWaitingToken: token suspendedAt: transition.
+
+	self assert: (instance signal: entry correlationId with: 7).
+	instance execute.
+
+	"the trigger got an activation of its own, carrying the impulse as its input"
+	self assert: (instance activations
+		detect: [ :each | each node == trigger ]) argument equals: 7.
+	"both branches arrive at the join either way, so this is the scenario check rather
+	than the assertion that discriminates"
+	self assert: (instance activations select: [ :each | each node == join ]) size equals: 2.
+	"reaching #end is what discriminates: with the branch identity lost the join keeps the
+	two arrivals apart and releases neither, while #state still reports #done"
+	self assert: (instance activations anySatisfy: [ :each | each node == end ]).
+	self assert: instance state equals: #done
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testSignalResumesWaitingToken [
+	"the impulse reaches the waiting spot its correlationId names and the flow runs on.
+	A condition wait was activated and parked inside its own execution, so its activation
+	is still standing: the impulse becomes that activation's value rather than the input
+	of a fresh one, and no second activation of the wait node appears.
+
+	#signal:with: itself only moves the waiting spot on - stepping the flow afterwards is
+	the caller's, which is why #execute follows here"
+	| instance wait entry |
+	instance := self waitingInstance.
+	wait := instance suspended first.
+	entry := instance
+		registerWaitingToken: (self tokenWaitingAt: wait in: instance)
+		suspendedAt: wait.
+
+	self assert: (instance signal: entry correlationId with: 7).
+	instance execute.
+
+	self assert: (instance activations select: [ :each | each node == wait ]) size equals: 1.
+	self assert: (instance activations detect: [ :each | each node == wait ]) value equals: 7.
+	"the suspension is gone, the entry with it, and the flow reached its end"
+	self assert: instance suspended isEmpty.
+	self assert: instance openWaitingEntries isEmpty.
+	self assert: (instance activations anySatisfy: [ :each | each node isKindOf: FBEndEvent ]).
+	self assert: instance state equals: #done
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testSignalWithConsumedCorrelationIdIsSilent [
+	"a second impulse under the same address is without effect and without error - the
+	guarantee a double submit, a redelivery out of the event log and a schedule firing at
+	a wait that is already gone all rest on. The first signal consumed the entry, so the
+	second finds nothing, and finding nothing is the answer"
+	| instance wait entry activationsAfterFirst |
+	instance := self waitingInstance.
+	wait := instance suspended first.
+	entry := instance
+		registerWaitingToken: (self tokenWaitingAt: wait in: instance)
+		suspendedAt: wait.
+	self assert: (instance signal: entry correlationId with: 7).
+	instance execute.
+	activationsAfterFirst := instance activations size.
+
+	self deny: (instance signal: entry correlationId with: 99).
+
+	self assert: instance activations size equals: activationsAfterFirst.
+	self assert: (instance activations detect: [ :each | each node == wait ]) value equals: 7.
+	self assert: instance state equals: #done
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testSignalWithUnknownCorrelationIdIsSilent [
+	"an address that was never handed out is without effect and without error. Measured
+	on an instance that really has an open waiting spot, so that answering false is a
+	miss and not an empty registry - and that waiting spot must be left standing rather
+	than resumed by whatever impulse happens to arrive"
+	| instance wait entry |
+	instance := self waitingInstance.
+	wait := instance suspended first.
+	entry := instance
+		registerWaitingToken: (self tokenWaitingAt: wait in: instance)
+		suspendedAt: wait.
+
+	self deny: (instance signal: 'never handed out' with: 7).
+
+	self assert: (instance suspended includes: wait).
+	self assert: instance openWaitingEntries asArray equals: { entry }.
+	self assert: instance state equals: #waiting.
+	self deny: (instance activations anySatisfy: [ :each | each node isKindOf: FBEndEvent ])
+]
+
+{ #category : 'tests' }
 FBWaitingRegistryTest >> testWaitingEntryInsideASubFlowIsFoundThroughTheOuterInstance [
 	"a wait inside a sub flow is registered on the child instance, where its suspension
 	is: the child holds no reference back to its caller. Resolving therefore walks the
@@ -106,10 +232,11 @@ FBWaitingRegistryTest >> testWaitingEntryInsideASubFlowIsFoundThroughTheOuterIns
 
 { #category : 'tests' }
 FBWaitingRegistryTest >> testWaitingRegistryEntryIsRemovedOnResume [
-	"nothing is wired into the resume path yet, so the removal is measured where a resume
-	will go through it: #takeWaitingEntryFor: answers the entry and forgets it. Taking it
-	a second time is the guarantee a double submit rests on - the second attempt finds
-	nothing, and that is the answer rather than an error"
+	"the removal measured on its own, without a resume around it: #takeWaitingEntryFor:
+	answers the entry and forgets it. Taking it a second time is the guarantee a double
+	submit rests on - the second attempt finds nothing, and that is the answer rather than
+	an error. #signal:with: rests on exactly this, see
+	#testSignalWithConsumedCorrelationIdIsSilent"
 	| instance wait entry |
 	instance := self waitingInstance.
 	wait := instance suspended first.

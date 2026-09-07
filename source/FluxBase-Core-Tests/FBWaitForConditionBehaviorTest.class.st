@@ -35,8 +35,8 @@ FBWaitForConditionBehaviorTest >> testSuspendedContainsTheWaitNodeNotTheBehavior
 { #category : 'tests' }
 FBWaitForConditionBehaviorTest >> testResumingAConditionWaitBehindASplitCompletesTheJoin [
 	"the branch identity a join reads has to survive a condition wait. It does, but not
-	the way a suspended flow form's does: FBFlowInstance>>resumeWaitingAt:with: takes
-	the suspended activation back up (#activationOf:) instead of minting a fresh one, so
+	the way a suspended flow form's does: resuming a node takes the suspended activation
+	back up (FBNode>>resumeIn:withToken:value:) instead of minting a fresh one, so
 	its own token - #splitId included - is still attached and there is nothing to
 	restore. This is what makes the missing suspension token of a condition wait
 	harmless today, see #testAConditionWaitStoresNoTokenForItsSuspension.
