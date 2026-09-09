@@ -46,6 +46,79 @@ FBRemoteFlowTaskTest >> setUp [
 ]
 
 { #category : 'tests' }
+FBRemoteFlowTaskTest >> testAFailureTakesTheErrorTransition [
+	"the other side reports that its flow stopped in error. The report is an
+	FBRemoteFlowFailed on the same address, and the task takes its #error branch - the
+	branch a local sub flow call takes when its child errors. A result arriving afterwards
+	finds the address consumed"
+	| start task onSuccess onError flow instance correlationId |
+	start := FBStartEvent new.
+	task := self remoteTask.
+	onSuccess := FBEndEvent new.
+	onError := FBEndEvent new.
+	start --> task.
+	task --> (onSuccess resultTransition: #success).
+	task --> (onError resultTransition: #error).
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+	correlationId := calls first correlationId.
+
+	self assert: (instance signal: correlationId with: (FBRemoteFlowFailed reason: 'no stock')).
+	instance execute.
+	self deny: (instance signal: correlationId with: #tooLate).
+
+	self assert: instance state equals: #done.
+	self assert: (instance rootExecutor activationOf: onError) node equals: onError.
+	self should: [ instance rootExecutor activationOf: onSuccess ] raise: Error
+]
+
+{ #category : 'tests' }
+FBRemoteFlowTaskTest >> testAFailureWithoutAnErrorTransitionStopsTheInstanceInError [
+	"no #error branch modelled: the task stops in error with the other side's reason on
+	record, the way it stops on a timeout without a #timedOut branch"
+	| start task end flow instance errored |
+	start := FBStartEvent new.
+	task := self remoteTask.
+	end := FBEndEvent new.
+	start --> task --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+
+	self assert: (instance signal: calls first correlationId with: (FBRemoteFlowFailed reason: 'no stock')).
+	instance execute.
+
+	self assert: instance state equals: #error.
+	errored := instance events last.
+	self assert: (errored isKindOf: FBNodeActivationErrored).
+	self assert: (errored message includesSubstring: 'no stock').
+	self assert: (errored message includesSubstring: '#error').
+	self should: [ instance rootExecutor activationOf: end ] raise: Error
+]
+
+{ #category : 'tests' }
+FBRemoteFlowTaskTest >> testTheInputIsWhatTheTaskAnswersForTheActivation [
+	"the remote flow's input is #inputValueFor: - the argument by default, and whatever a
+	subclass assembles otherwise. A task standing in for such a subclass here"
+	| start task end flow instance |
+	start := FBStartEvent new.
+	task := FBRemoteFlowTaskAssemblingItsInput new
+		name: 'assembling';
+		targetFlowName: 'approve-order';
+		dispatchPort: self port;
+		yourself.
+	end := FBEndEvent new.
+	start --> task --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 5.
+
+	self assert: calls first inputValue equals: { #amount -> 5. #currency -> 'EUR' } asDictionary.
+	self assert: calls first flowInstance identicalTo: instance
+]
+
+{ #category : 'tests' }
 FBRemoteFlowTaskTest >> testAResultTakesTheSuccessTransition [
 	| start task onSuccess onTimeout flow instance |
 	start := FBStartEvent new.

@@ -9,7 +9,10 @@ here would be the kind of duplicate FluxBase keeps taking out.
 	callbackAddress	the FBCallbackAddress that embeds it together with the locator of
 			the machine to come back to - the one string the other side sends back
 	targetFlowName	what the other side is to run
-	inputValue	the task's argument, the remote flow's input
+	inputValue	the remote flow's input, FBRemoteFlowTask>>inputValueFor:
+	flowInstance	the instance that waits - for the port, which may need it to render the
+			callback address in a form of its own (an environment's local address
+			names the instance next to the correlationId); a reference, never sent
 	dispatchedAt	when the call went out - for whoever has to explain a wait later
 "
 Class {
@@ -20,6 +23,7 @@ Class {
 		'callbackAddress',
 		'targetFlowName',
 		'inputValue',
+		'flowInstance',
 		'dispatchedAt'
 	],
 	#category : 'FluxBase-Core-Model',
@@ -55,6 +59,16 @@ FBRemoteFlowCall >> dispatchedAt [
 { #category : 'accessing' }
 FBRemoteFlowCall >> dispatchedAt: aDateAndTime [
 	dispatchedAt := aDateAndTime
+]
+
+{ #category : 'accessing' }
+FBRemoteFlowCall >> flowInstance [
+	^ flowInstance
+]
+
+{ #category : 'accessing' }
+FBRemoteFlowCall >> flowInstance: aFlowInstance [
+	flowInstance := aFlowInstance
 ]
 
 { #category : 'accessing' }
