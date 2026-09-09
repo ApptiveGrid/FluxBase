@@ -212,9 +212,11 @@ FBFlowInstance >> ended [
 	loop or a parallel scope is its own split execution - and nothing could remove them
 	before, since a join cannot tell on its own whether a further arrival may still
 	come (the latch in FBJoinBehavior>>execute exists for exactly that). Once nothing
-	runs, nothing arrives. The waiting registry stays: #waitingEntryFor: answers whether
-	an address exists, and that answer is kept for a finished instance, see
-	FBWaitingRegistryTest>>testAReservationOfAFinishedInstanceIsNotOpen.
+	runs, nothing arrives. The waiting registry falls with them: an address of mine names
+	a wait, and there is none left - an entry whose wait was resumed went with the resume
+	(FBBaseExecutor>>resume:withToken:value:), and a reservation for a node the flow never
+	reached is dead now. After me, #waitingEntryFor: answers nil for every address I ever
+	handed out, and a signal on one is as silent as on a consumed one.
 
 	Not reached for an instance that was already over when it was persisted - no step
 	happens there any more - and reached again only if something runs me again, which
@@ -222,6 +224,7 @@ FBFlowInstance >> ended [
 
 	joinStates := nil.
 	splitBranchCounts := nil.
+	waitingRegistry := nil.
 	self addEvent: FBFlowInstanceEnded new
 ]
 
@@ -465,11 +468,10 @@ FBFlowInstance >> openWaitingEntries [
 	The same view over the chain of active instances that #suspended is over their
 	executors, one level up"
 
-	"A finished instance has no open waiting spot, whatever still lies in its registry: a
-	reservation handed out for a node the flow then never reached is dead there. Nothing
-	removes it - FluxBase has no moment 'the instance ended', #done is a derived answer and
-	nobody observes the transition - so the reader answers correctly instead. #waitingEntryFor:
-	still finds such an address; it answers 'does this address exist', not 'is anything open'"
+	"An instance that ended holds no registry any more (#ended). The guard is for the two
+	that still hold one: an instance persisted as finished before there was an end moment,
+	and an instance that stopped in error - it keeps its addresses for inspection, but a
+	reservation for a node it will never reach is not an open waiting spot"
 	(executor notNil and: [ self isDone ]) ifTrue: [ ^ #() ].
 	^ self activeFlowInstances flatCollect: [ :each | each waitingRegistry entries ]
 ]
