@@ -293,7 +293,11 @@ FBBaseExecutor >> popThenResume: aBlock [
 
 { #category : 'executing' }
 FBBaseExecutor >> resume: aSuspension withToken: aToken value: aValue [
-	"take one suspension out of my bookkeeping and let it go on with aValue.
+	"take one suspension out of my bookkeeping and let it go on with aValue. The one way
+	a suspension is continued - by an impulse from outside (FBWaitingEntry,
+	FBWaitingReservation), by a resume addressed by node (FBFlowInstance>>
+	resumeWaitingAt:with:) and by ApptiveGrid's own ways of picking a suspension - so that
+	everything a continuation has to clear is cleared here and nowhere else.
 
 	How it goes on is aSuspension's own answer, not a test made here: #suspended holds
 	transitions and nodes side by side by design (see #addWaiting:withToken:), and the
@@ -301,17 +305,31 @@ FBBaseExecutor >> resume: aSuspension withToken: aToken value: aValue [
 	fresh activation, a node that parked inside its own execution still has one. So
 	FBTransition and FBNode each implement #resumeIn:withToken:value:.
 
+	The registry entries naming aSuspension go first: a wait that is over has no address
+	any more, whichever way it was continued. Asked of my own instance's registry, not
+	through #openWaitingEntries - the entry was registered on the instance whose executor
+	holds the suspension (FBBaseActivation>>waitForNode:withToken:), and #openWaitingEntries
+	answers openness, which is momentarily false in the middle of a resume: between
+	removing the last suspension and activating what it goes on with, nothing is pending
+	and nothing suspended, and #isDone is true. A reservation is not an entry of the
+	suspension and stays, see FBWaitingAddress>>matchesSuspension:.
+
 	aToken is the token to go on with AND the one to take off the queue - it is looked up
 	by identity through #takeTokenForSuspended:satisfying:, so a suspension registered
 	next to an unregistered one of the same object no longer costs the other its token.
-	Passing nil means 'whichever, oldest first', which is what a resume addressed by node
-	means and what an executor holding no token for the suspension answers anyway"
+	Passing nil means 'whichever, oldest first', and the one taken is then the one the
+	wait goes on with: a transition parked behind a split gateway has its #splitId only
+	there, and a fresh activation without it would never complete the join. A named
+	token that is no longer on the queue - a reservation took it before calling here -
+	is still the one to go on with"
 
+	| token |
+	flowInstance dropWaitingEntriesMatching: aSuspension.
 	suspended remove: aSuspension.
-	self
+	token := self
 		takeTokenForSuspended: aSuspension
 		satisfying: [ :each | aToken isNil or: [ each == aToken ] ].
-	aSuspension resumeIn: self withToken: aToken value: aValue
+	aSuspension resumeIn: self withToken: (aToken ifNil: [ token ]) value: aValue
 ]
 
 { #category : 'as yet unclassified' }
