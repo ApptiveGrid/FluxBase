@@ -12,6 +12,6 @@ FBSystemErrorTestTask class >> isAbstract [
 ]
 
 { #category : 'accessing' }
-FBSystemErrorTestTask >> value [
+FBSystemErrorTestTask >> producedValue [
 	^ 1/0
 ]

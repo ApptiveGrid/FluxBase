@@ -9,7 +9,7 @@ Class {
 FBPluggableTaskTest >> testActivationIsDoneAfterExecute [
 	| start task end flow instance activation |
 	start := FBStartEvent new.
-	task := (FBPluggableTask named: 'pluggable') value: 42.
+	task := (FBPluggableTask named: 'pluggable') produces: 42.
 	end := FBEndEvent new.
 
 	start --> task --> end.

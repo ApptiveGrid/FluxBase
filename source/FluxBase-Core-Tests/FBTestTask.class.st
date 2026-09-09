@@ -12,6 +12,6 @@ FBTestTask class >> isAbstract [
 ]
 
 { #category : 'accessing' }
-FBTestTask >> value [
+FBTestTask >> producedValue [
 	^ 10 atRandom 
 ]

@@ -471,7 +471,15 @@ FBNode >> transitionClass [
 ]
 
 { #category : 'accessing' }
-FBNode >> value [ 
+FBNode >> producedValue [
+	"what a plain task hands out as its result when it runs - FBTaskBehavior>>execute
+	writes it to the activation. Nothing by default; a node kind that produces a fixed
+	value overrides this (FBPluggableTask configures it through #produces:).
+
+	Used to be #value, the same selector FBActivation>>value carries for the result of a
+	step, which read as 'activation value: self node value' - the result on the left, the
+	order on the right, under one name. FBActivation>>value stays: it is the result, with
+	#argument as its counterpart"
 	^ nil
 ]
 

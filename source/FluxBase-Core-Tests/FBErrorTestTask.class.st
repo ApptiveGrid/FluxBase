@@ -12,7 +12,7 @@ FBErrorTestTask class >> isAbstract [
 ]
 
 { #category : 'accessing' }
-FBErrorTestTask >> value [
+FBErrorTestTask >> producedValue [
 	^ [ 1/0 ]
 		on: Error 
 	 	do: [ :error | FBError signal: 'execution went wrong' ]
