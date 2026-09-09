@@ -39,6 +39,19 @@ FBFlowInstance >> activate: anActivation [
 
 { #category : 'convenience' }
 FBFlowInstance >> activateProtected: activation [
+	"run one activation, and notice when it was the last.
+
+	Every activation of every executor of mine passes through here - a step of the root
+	executor, a parallel iteration, a resume from outside, a child node of a sub flow
+	(through the child instance's own #activateProtected:) - so this is the one boundary
+	at which 'the instance is over' can be asked honestly, whichever loop drives the
+	steps. #atEnd is false while a scope or sub flow frame is on top, and the moments
+	when nothing is pending or suspended only because a transition is half made lie
+	inside FBBaseExecutor>>resume:withToken:value:, not at this boundary.
+
+	An instance that errored has stopped rather than ended: the error event stays its
+	last word and its run bookkeeping stays for inspection, see #ended"
+
 	[ [ self activate: activation ]
 		on: FBError  
 		do: [ :error |
@@ -52,7 +65,8 @@ FBFlowInstance >> activateProtected: activation [
 			self addEvent: (FBNodeActivationErrored new 
 				activation: activation;
 				activationError: error messageText).
-			error pass ]
+			error pass ].
+	(self atEnd and: [ self hasErrors not ]) ifTrue: [ self ended ]
 ]
 
 { #category : 'accessing' }
@@ -183,6 +197,32 @@ FBFlowInstance >> dropWaitingEntriesMatching: aSuspension [
 	(waitingRegistry ifNil: [ ^ self ]) entries
 		select: [ :each | each matchesSuspension: aSuspension ]
 		thenDo: [ :each | waitingRegistry takeEntryFor: each correlationId ]
+]
+
+{ #category : 'executing' }
+FBFlowInstance >> ended [
+	"the one moment 'this instance is over' - reached from #activateProtected: when the
+	activation that just ran left nothing pending and nothing suspended with the root
+	executor on top, and nothing errored. Recorded as an FBFlowInstanceEnded for the
+	event log and for whoever observes me. An instance in #error does not get here: it
+	stopped, and what it left behind is what there is to look at.
+
+	What is bookkeeping of the run and not of the result falls here. #joinStates and
+	#splitBranchCounts grow by one entry per pass through a split - every iteration of a
+	loop or a parallel scope is its own split execution - and nothing could remove them
+	before, since a join cannot tell on its own whether a further arrival may still
+	come (the latch in FBJoinBehavior>>execute exists for exactly that). Once nothing
+	runs, nothing arrives. The waiting registry stays: #waitingEntryFor: answers whether
+	an address exists, and that answer is kept for a finished instance, see
+	FBWaitingRegistryTest>>testAReservationOfAFinishedInstanceIsNotOpen.
+
+	Not reached for an instance that was already over when it was persisted - no step
+	happens there any more - and reached again only if something runs me again, which
+	nothing does"
+
+	joinStates := nil.
+	splitBranchCounts := nil.
+	self addEvent: FBFlowInstanceEnded new
 ]
 
 { #category : 'accessing' }

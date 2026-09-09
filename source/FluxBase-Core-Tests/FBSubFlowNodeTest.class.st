@@ -105,6 +105,37 @@ FBSubFlowNodeTest >> testParentTracksItsSubFlowInstancesButChildHasNoBackReferen
 ]
 
 { #category : 'tests' }
+FBSubFlowNodeTest >> testAChildInstanceEndsBeforeItsCaller [
+    "a sub flow's child instance has an end of its own: its last activation runs
+    through the child's #activateProtected:, so the child records FBFlowInstanceEnded
+    and drops its run bookkeeping while the caller still has the continuation behind
+    the sub flow node to run. The caller's own end comes with its own last activation"
+    | parentFlow instance child hasEnded steps |
+    hasEnded := [ :anInstance |
+        anInstance events anySatisfy: [ :each | each isKindOf: FBFlowInstanceEnded ] ].
+    parentFlow := self flowCalling: FBFlow simpleFlow.
+    instance := parentFlow newInstance.
+    instance initialValue: 1.
+    steps := 0.
+    [ instance atEnd not and: [
+        instance subFlowInstances isEmpty or: [ (hasEnded value: instance subFlowInstances first) not ] ] ]
+        whileTrue: [
+            instance step.
+            steps := steps + 1.
+            self assert: steps < 20 ].
+    child := instance subFlowInstances first.
+
+    "the child is over, the caller is not"
+    self assert: child state equals: #done.
+    self deny: (hasEnded value: instance).
+    self deny: instance atEnd.
+
+    instance execute.
+    self assert: (hasEnded value: instance).
+    self assert: instance state equals: #done
+]
+
+{ #category : 'tests' }
 FBSubFlowNodeTest >> testResumingWaitInsideSubFlowFinishesTheWholeFlow [
     | childFlow parentFlow instance wait |
     childFlow := self flowWaitingForever.
