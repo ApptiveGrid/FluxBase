@@ -111,13 +111,20 @@ FBTransition >> resumeIn: anExecutor withToken: aToken value: aValue [
 	aToken is the token my target would have been activated with. Without it the fresh
 	activation carries a default token with no #splitId, and a join behind me opens a
 	second FBJoinState that never reaches its expected count - see
-	FBBaseActivation>>waitForNode:withToken:"
+	FBBaseActivation>>waitForNode:withToken:. Answers the fresh activation"
 
 	| activation |
 	activation := anExecutor newActivation: self.
-	aToken ifNotNil: [ :token | activation token: token ].
+	aToken ifNotNil: [ :token |
+		activation token: token.
+		"the step that parked me was my source's: it marked its own token #waiting
+		(FBBaseActivation>>waitForNode:withToken:), and aToken is that token's child.
+		A token persisted before #parent was a reference stops the walk, and the source
+		keeps its mark - as it did all along"
+		token parent ifNotNil: [ :parked | parked resumed ] ].
 	activation argument: aValue.
-	anExecutor activate: activation
+	anExecutor activate: activation.
+	^ activation
 ]
 
 { #category : 'accessing' }

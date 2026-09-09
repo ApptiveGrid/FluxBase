@@ -321,7 +321,11 @@ FBBaseExecutor >> resume: aSuspension withToken: aToken value: aValue [
 	wait goes on with: a transition parked behind a split gateway has its #splitId only
 	there, and a fresh activation without it would never complete the join. A named
 	token that is no longer on the queue - a reservation took it before calling here -
-	is still the one to go on with"
+	is still the one to go on with.
+
+	Answers the activation that goes on - the one taken back up, or the one minted -
+	so that whoever resumed can say something about it: ApptiveGrid records who
+	submitted on it"
 
 	| token |
 	flowInstance dropWaitingEntriesMatching: aSuspension.
@@ -329,7 +333,7 @@ FBBaseExecutor >> resume: aSuspension withToken: aToken value: aValue [
 	token := self
 		takeTokenForSuspended: aSuspension
 		satisfying: [ :each | aToken isNil or: [ each == aToken ] ].
-	aSuspension resumeIn: self withToken: (aToken ifNil: [ token ]) value: aValue
+	^ aSuspension resumeIn: self withToken: (aToken ifNil: [ token ]) value: aValue
 ]
 
 { #category : 'as yet unclassified' }

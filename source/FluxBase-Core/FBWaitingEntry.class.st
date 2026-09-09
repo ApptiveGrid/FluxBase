@@ -59,7 +59,8 @@ FBWaitingEntry >> matchesSuspension: anObject [
 
 { #category : 'resuming' }
 FBWaitingEntry >> resumeIn: anInstance with: aValue [
-	"hand aValue to the wait I name and answer whether anything was resumed.
+	"hand aValue to the wait I name and answer the activation that went on, or nil when
+	the wait was gone.
 
 	I take myself out of the registry first, whether or not my suspension turns out to
 	still be open: an entry whose suspension is gone - a node-addressed resume took it in
@@ -74,9 +75,8 @@ FBWaitingEntry >> resumeIn: anInstance with: aValue [
 	anInstance takeWaitingEntryFor: correlationId.
 	holder := anInstance activeExecutors
 		detect: [ :each | each suspended includes: suspension ]
-		ifNone: [ ^ false ].
-	holder resume: suspension withToken: token value: aValue.
-	^ true
+		ifNone: [ ^ nil ].
+	^ holder resume: suspension withToken: token value: aValue
 ]
 
 { #category : 'accessing' }

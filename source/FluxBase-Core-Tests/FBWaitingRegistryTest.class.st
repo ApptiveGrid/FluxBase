@@ -440,6 +440,46 @@ FBWaitingRegistryTest >> testResumingClearsTheTokenKeptForTheSuspension [
 ]
 
 { #category : 'tests' }
+FBWaitingRegistryTest >> testResumingAParkedTransitionUnparksTheStepThatParkedIt [
+	"a transition into a trigger-requiring node is parked by the step before it: that
+	step's activation marks its strand #waiting. Once the trigger arrives, the step is
+	over and its activation must not read #waiting any more"
+	| instance parking |
+	instance := self flowWithExternalTrigger newInstance.
+	instance executeWith: 1.
+	parking := instance activations detect: [ :each | each node == instance flow start ].
+	self assert: parking state equals: #waiting.
+
+	self assert: (instance signal: instance openWaitingEntries first correlationId with: 7).
+	instance execute.
+
+	self assert: parking state equals: #done.
+	self assert: instance state equals: #done
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testSignalHandsTheResumedActivationToTheBlock [
+	"whoever resumes may have to say something about the step that went on - ApptiveGrid
+	records who submitted. #signal:with:ifResumed: hands over that activation: the one
+	minted for a parked transition here, the standing one for a node. A silent signal
+	evaluates nothing"
+	| instance trigger seen |
+	seen := OrderedCollection new.
+	instance := self flowWithExternalTrigger newInstance.
+	instance executeWith: 1.
+	trigger := instance suspended first waitingNode.
+
+	self assert: (instance signal: instance openWaitingEntries first correlationId with: 7
+		ifResumed: [ :activation | seen add: activation ]).
+	self assert: seen size equals: 1.
+	self assert: seen first node identicalTo: trigger.
+	self assert: seen first argument equals: 7.
+
+	self deny: (instance signal: 'unknown' with: 8 ifResumed: [ :activation | seen add: activation ]).
+	self assert: seen size equals: 1
+]
+
+{ #category : 'tests' }
 FBWaitingRegistryTest >> testSignalBehindASplitCompletesTheJoin [
 	"the branch identity has to survive an impulse from outside. A trigger-requiring node
 	has no activation while the transition into it is parked, so #signal:with: mints one -

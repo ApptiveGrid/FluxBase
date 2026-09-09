@@ -6,6 +6,44 @@ Class {
 }
 
 { #category : 'tests' }
+FBWaitForConditionBehaviorTest >> testAResumedWaitIsNoLongerWaiting [
+	"the wait marks its strand #waiting when it parks, and the activation reads its state
+	off that mark. The resume has to take the mark back: without it the strand - and
+	the activation anyone looks at afterwards - would report #waiting for good"
+	| instance wait activation |
+	"the sample flow's wait parks on an even value"
+	instance := FBFlow simpleWaitFlow newInstance.
+	instance initialValue: 2.
+	instance execute.
+	self assert: instance state equals: #waiting.
+	wait := instance suspended first.
+	activation := instance activations detect: [ :each | each node == wait ].
+	self assert: activation state equals: #waiting.
+	self assert: activation token isWaiting.
+
+	instance resumeWaitingAt: wait with: 7.
+
+	self deny: activation token isWaiting.
+	self deny: activation state = #waiting.
+	instance execute.
+	self assert: instance state equals: #done.
+	self assert: activation state equals: #done
+]
+
+{ #category : 'tests' }
+FBWaitForConditionBehaviorTest >> testAWaitWhoseConditionHoldsIsDone [
+	"a wait that does not have to wait is a finished step like any other and reads
+	#done in the log - not #created, which is what it read while nothing marked it"
+	| instance wait |
+	instance := FBFlow simpleWaitFlow newInstance.
+	instance initialValue: 3.
+	instance execute.
+	wait := instance flow nodes detect: [ :each | each isKindOf: FBWaitForCondition ].
+	self assert: instance state equals: #done.
+	self assert: (instance activations detect: [ :each | each node == wait ]) state equals: #done
+]
+
+{ #category : 'tests' }
 FBWaitForConditionBehaviorTest >> testConditionTrueFollowsOutgoing [
 	| flow instance |
 	flow := FBFlow simpleWaitFlow.
