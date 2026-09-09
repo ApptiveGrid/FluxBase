@@ -93,13 +93,13 @@ FBWaitingRegistryTest >> testANodeAddressedResumeDropsTheEntryOfItsSuspension [
 ]
 
 { #category : 'tests' }
-FBWaitingRegistryTest >> testAReservationOfAFinishedInstanceIsNotOpen [
+FBWaitingRegistryTest >> testAFinishedInstanceHoldsNoAddress [
 	"a link node reserved an address for a node the flow then never reached - a condition
 	ahead of the form did not hold, or, as here, the node is simply not on the way. The
-	instance finishes with the reservation still in its registry, because nothing in
-	FluxBase runs at the moment an instance ends. What has to hold all the same: nothing
-	is reported open, a signal on the dead address is without effect, and a run that
-	ended answers no opened waiting spots even though one was reserved on the way"
+	reservation is dead the moment the instance ends, and it falls there
+	(FBFlowInstance>>ended): the address does not exist any more, nothing is open, a
+	signal on it is as silent as on a consumed one, and a run that ended answers no
+	opened waiting spots even though one was reserved on the way"
 	| start link never flow instance handedOut |
 	handedOut := OrderedCollection new.
 	never := FBTriggerTask named: 'never reached'.
@@ -113,7 +113,30 @@ FBWaitingRegistryTest >> testAReservationOfAFinishedInstanceIsNotOpen [
 
 	self assert: instance state equals: #done.
 	self assert: handedOut size equals: 1.
-	"the address exists, but nothing is open"
+	self assert: instance waitingRegistry entries isEmpty.
+	self assert: (instance waitingEntryFor: handedOut first correlationId) isNil.
+	self assert: instance openWaitingEntries isEmpty.
+	self deny: (instance signal: handedOut first correlationId with: 7)
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testAnInstanceStoppedInErrorKeepsItsAddressButReportsNothingOpen [
+	"an instance that errors has stopped, not ended (FBFlowInstance>>activateProtected:),
+	and what it left behind stays for inspection - its reservation included. What holds
+	all the same: nothing is reported open, and a signal on the address of a wait that
+	will never park is without effect"
+	| start link never flow instance handedOut |
+	handedOut := OrderedCollection new.
+	never := FBTriggerTask named: 'never reached'.
+	start := FBStartEvent new.
+	link := self linkNodeReservingAt: never into: handedOut.
+	start --> link --> (FBErrorTestTask named: 'fails') --> FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+
+	self assert: instance state equals: #error.
+	self assert: handedOut size equals: 1.
 	self assert: instance waitingRegistry entries asArray equals: handedOut asArray.
 	self assert: (instance waitingEntryFor: handedOut first correlationId) identicalTo: handedOut first.
 	self assert: instance openWaitingEntries isEmpty.
