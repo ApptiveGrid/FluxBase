@@ -18,7 +18,8 @@ Two things follow from being a class rather than a Dictionary. #takeEntryFor: is
 idempotency point: it answers the entry and forgets it, and answers nil both for an
 id that was never registered and for one already consumed. Absence is the answer to a
 second submit, not an error. And entries are only created through
-FBFlowInstance>>registerWaitingToken:suspendedAt:, so being reachable from outside
+FBFlowInstance>>registerWaitingToken:suspendedAt: and, ahead of a wait, through
+FBFlowInstance>>reserveWaitingSpotAt:anchoredAt:, so being reachable from outside
 stays something a caller asks for.
 
 I hang on the flow instance and not on the executor because an executor is a stack
@@ -84,6 +85,22 @@ FBWaitingRegistry >> registerToken: aToken suspendedAt: anObject [
 		yourself.
 	entriesByCorrelationId at: entry correlationId put: entry.
 	^ entry
+]
+
+{ #category : 'accessing' }
+FBWaitingRegistry >> reserveAt: aNode anchoredAt: aToken [
+	"mint an address for a wait that has not parked yet - one that will be at aNode on the
+	strand descending from aToken - and answer the reservation filed under it. Minted here
+	for the same reason #registerToken:suspendedAt: mints here: one place, unique across
+	instances. See FBWaitingReservation"
+	| reservation |
+	reservation := FBWaitingReservation new
+		correlationId: FBIdGenerator current newId;
+		targetNode: aNode;
+		anchorToken: aToken;
+		yourself.
+	entriesByCorrelationId at: reservation correlationId put: reservation.
+	^ reservation
 ]
 
 { #category : 'accessing' }

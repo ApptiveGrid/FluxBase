@@ -236,15 +236,35 @@ FBBaseExecutor >> takeTokenForSuspended: anObject [
 	#suspended holds its suspensions in the order they happened, so a resume that takes
 	one out of #suspended has to take the matching one from the front here."
 
+	^ self takeTokenForSuspended: anObject satisfying: [ :each | true ]
+]
+
+{ #category : 'accessing' }
+FBBaseExecutor >> takeTokenForSuspended: anObject satisfying: aBlock [
+	"answer and forget the first token stored for anObject that aBlock accepts, or nil.
+
+	The unary variant asks for any of them, oldest first, which is what a resume that does
+	not name a strand means. A reservation does name one - it knows the token it was handed
+	out under - and has to have that one out of the queue rather than whichever is oldest:
+	two iterations of a parallel scope park the same transition, and taking the wrong token
+	leaves the other iteration with a token that is not its own.
+
+	Same reason a registry entry passes its own token as the criterion instead of relying
+	on oldest-first. That was the one loose end left when #resume:withToken:value: was
+	built (2026-09-07): a suspension registered next to an unregistered one of the same
+	object had the wrong token taken off the queue."
+
 	| tokens token |
 	suspendedTokens ifNil: [ ^ nil ].
 	tokens := suspendedTokens at: anObject ifAbsent: [ ^ nil ].
 	"executors persisted while one token was kept per suspended object hold that token
 	itself rather than a queue of them"
 	(tokens isKindOf: Collection) ifFalse: [
+		(aBlock value: tokens) ifFalse: [ ^ nil ].
 		suspendedTokens removeKey: anObject.
 		^ tokens ].
-	token := tokens removeFirst.
+	token := tokens detect: aBlock ifNone: [ ^ nil ].
+	tokens remove: token.
 	tokens ifEmpty: [ suspendedTokens removeKey: anObject ].
 	^ token
 ]
@@ -281,13 +301,16 @@ FBBaseExecutor >> resume: aSuspension withToken: aToken value: aValue [
 	fresh activation, a node that parked inside its own execution still has one. So
 	FBTransition and FBNode each implement #resumeIn:withToken:value:.
 
-	The token to go on with comes from the caller - the registry entry holds it - and
-	not from #takeTokenForSuspended:, which cannot tell two suspensions of the same
-	object apart. #takeTokenForSuspended: is still sent, to shorten the token queue by
-	the one suspension that is no longer open"
+	aToken is the token to go on with AND the one to take off the queue - it is looked up
+	by identity through #takeTokenForSuspended:satisfying:, so a suspension registered
+	next to an unregistered one of the same object no longer costs the other its token.
+	Passing nil means 'whichever, oldest first', which is what a resume addressed by node
+	means and what an executor holding no token for the suspension answers anyway"
 
 	suspended remove: aSuspension.
-	self takeTokenForSuspended: aSuspension.
+	self
+		takeTokenForSuspended: aSuspension
+		satisfying: [ :each | aToken isNil or: [ each == aToken ] ].
 	aSuspension resumeIn: self withToken: aToken value: aValue
 ]
 

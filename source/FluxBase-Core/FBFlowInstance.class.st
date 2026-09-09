@@ -232,6 +232,16 @@ FBFlowInstance >> hasErrors [
 	^ activations anySatisfy: [ :each | each hasError ]
 ]
 
+{ #category : 'testing' }
+FBFlowInstance >> hasReservationAt: aNode forToken: aToken [
+	"does an address already stand for a wait at aNode on aToken's strand, in me or in an
+	instance executing inside me? Asked by FBBaseActivation>>waitForNode:withToken: so
+	that such a wait does not mint a second address. Walks down the chain only - a
+	reservation in an instance above the parking one is not visible from here and is
+	reconciled when it resolves instead, see FBWaitingReservation>>resumeIn:with:"
+	^ self openWaitingEntries anySatisfy: [ :each | each reservesWaitAt: aNode forToken: aToken ]
+]
+
 { #category : 'accessing' }
 FBFlowInstance >> id [
 
@@ -436,6 +446,22 @@ FBFlowInstance >> registerWaitingToken: aToken suspendedAt: anObject [
 ]
 
 { #category : 'executing' }
+FBFlowInstance >> reserveWaitingSpotAt: aNode anchoredAt: aToken [
+	"hand out an address for a wait that has not parked yet: the one that will be at aNode
+	on the strand descending from aToken. For a link that has to go into a mail before
+	the flow reaches the node that waits - the mail node sits before that node, so at the
+	time the link is built there is nothing to register.
+
+	aToken is the token of the activation asking, and it is what makes the address hit
+	the right wait when the same node parks more than once: a link node inside a parallel
+	scope runs per iteration and reserves per iteration. Registers on me, like a
+	registration does; read back through the chain, see FBWaitingReservation"
+
+	waitingRegistry ifNil: [ waitingRegistry := FBWaitingRegistry new ].
+	^ waitingRegistry reserveAt: aNode anchoredAt: aToken
+]
+
+{ #category : 'executing' }
 FBFlowInstance >> resumeWaitingAt: aNode with: aValue [
 	"look for the waiting node in this instance's own executors and in those of the
 	flow instances executing inside it, so that a wait modelled inside a sub flow can
@@ -492,28 +518,23 @@ FBFlowInstance >> signal: aCorrelationId with: aValue [
 
 	An unknown correlationId and an already consumed one both answer false and change
 	nothing. That is the whole idempotency guarantee - a double submit, a redelivery out
-	of the event log, a schedule firing at a wait that is long gone - and it rests on
-	#takeWaitingEntryFor: forgetting the entry here, before anything is advanced.
+	of the event log, a schedule firing at a wait that is long gone.
 
-	Knows nothing about what kind of impulse this is: the waiting spot decides how it
-	goes on, see FBBaseExecutor>>resume:withToken:value:.
+	Knows nothing about what kind of address this is: the entry resolves itself and
+	decides when it is spent. A plain FBWaitingEntry names a parked wait and is spent as
+	soon as it is signalled, open or not; an FBWaitingReservation names a wait that may
+	not have parked yet and stays until it really resumed something. That is why the
+	entry is looked up here and not taken - taking is the entry's own step.
 
 	Does not run the flow on afterwards, the same way #resumeWaitingAt:with: does not -
 	the caller decides how far to step. #resumeWaitingAt:with: stays for the local case
 	of addressing a wait by node, but is not developed further: node identity cannot
 	name a waiting spot, which is what a correlationId is for"
 
-	| entry holder |
-	entry := self takeWaitingEntryFor: aCorrelationId.
+	| entry |
+	entry := self waitingEntryFor: aCorrelationId.
 	entry ifNil: [ ^ false ].
-	"an entry whose suspension is no longer open - a node-addressed resume took it in
-	the meantime, which does not clear the registry - is treated like a consumed id
-	rather than as an error, so that the two ways in cannot make each other fail"
-	holder := self activeExecutors
-		detect: [ :each | each suspended includes: entry suspension ]
-		ifNone: [ ^ false ].
-	holder resume: entry suspension withToken: entry token value: aValue.
-	^ true
+	^ entry resumeIn: self with: aValue
 ]
 
 { #category : 'accessing' }

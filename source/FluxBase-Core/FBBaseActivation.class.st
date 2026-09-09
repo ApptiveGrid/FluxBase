@@ -267,6 +267,9 @@ FBBaseActivation >> waitForNode: aSuspension withToken: aToken [
 	a path that parks without a token is a path that produces an entry with no #splitId."
 	self waiting.
 	executor addWaiting: aSuspension withToken: aToken.
-	aSuspension waitingNode isExternallyResumable ifTrue: [
-		self flowInstance registerWaitingToken: aToken suspendedAt: aSuspension ]
+	aSuspension waitingNode isExternallyResumable ifFalse: [ ^ self ].
+	"an address handed out ahead of this wait - a link that went into a mail before the
+	flow got here - is its address; minting a second one would leave two for one wait"
+	(self flowInstance hasReservationAt: aSuspension waitingNode forToken: aToken)
+		ifFalse: [ self flowInstance registerWaitingToken: aToken suspendedAt: aSuspension ]
 ]
