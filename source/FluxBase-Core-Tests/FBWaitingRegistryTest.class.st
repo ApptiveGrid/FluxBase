@@ -49,24 +49,14 @@ FBWaitingRegistryTest >> flowWithExternalTrigger [
 ]
 
 { #category : 'private' }
-FBWaitingRegistryTest >> flowWaitingForeverFromOutside [
-	"like #flowWaitingForever, but the wait answers FBNode>>isExternallyResumable - so the
-	engine registers it and the entry has to carry the parked activation's own token"
-	| start wait |
+FBWaitingRegistryTest >> flowWithTwoExternalTriggersInSequence [
+	"start -> two trigger-requiring, externally reachable tasks in a row -> end. Shaped
+	like a two-page form: resuming the first opens the waiting spot of the second"
+	| start first second |
 	start := FBStartEvent new.
-	wait := start addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
-	wait addOutgoingNode: FBEndEvent new.
-	^ FBFlow new start: start
-]
-
-{ #category : 'private' }
-FBWaitingRegistryTest >> flowWithExternalTrigger [
-	"a flow shaped start -> trigger-requiring, externally reachable task -> end. The
-	transition into the task is what parks, so its waiting spot is transition-shaped"
-	| start trigger |
-	start := FBStartEvent new.
-	trigger := start addOutgoingNode: (FBTriggerTask named: 'trigger').
-	trigger addOutgoingNode: FBEndEvent new.
+	first := start addOutgoingNode: (FBTriggerTask named: 'page 1').
+	second := first addOutgoingNode: (FBTriggerTask named: 'page 2').
+	second addOutgoingNode: FBEndEvent new.
 	^ FBFlow new start: start
 ]
 
@@ -427,6 +417,112 @@ FBWaitingRegistryTest >> testWaitingRegistryResolvesCorrelationIdToToken [
 	self assert: entry suspension identicalTo: wait.
 	self assert: (instance suspended includes: entry suspension).
 	self assert: instance openWaitingEntries asArray equals: { entry }
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testWaitingSpotsOpenedAnswersBothHalvesOfASplit [
+	"a collection and not a single value: an AND split into two trigger-requiring nodes
+	leaves two waiting spots, and a caller that builds a link and a schedule per spot has
+	to see both. This is the case the design note calls out"
+	| start split a b join end flow instance opened |
+	start := FBStartEvent new.
+	split := FBAndSplit named: 'split'.
+	a := FBTriggerTask named: 'form a'.
+	b := FBTriggerTask named: 'form b'.
+	join := FBAndJoin named: 'join'.
+	end := FBEndEvent new.
+	start --> split.
+	split --> a --> join.
+	split --> b --> join.
+	join --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+
+	opened := instance waitingSpotsOpenedDuring: [ instance executeWith: 42 ].
+
+	self assert: opened size equals: 2.
+	self
+		assert: ((opened collect: [ :each | each suspension waitingNode name ]) asSortedCollection asArray)
+		equals: #( 'form a' 'form b' ).
+	"two spots, two addresses - neither may stand in for the other"
+	self deny: opened first correlationId equals: opened second correlationId
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testWaitingSpotsOpenedAnswersOneOpenedInsideASubFlow [
+	"the case an announcement could not have covered: a wait modelled in a local sub flow
+	registers on the child instance, and the child holds no reference back to its caller.
+	Read over the chain, it is answered through the outermost instance - which is the one
+	a caller runs and the one an outward address names"
+	| instance opened child |
+	instance := (self flowCalling: self flowWithExternalTrigger) newInstance.
+
+	opened := instance waitingSpotsOpenedDuring: [ instance executeWith: 1 ].
+
+	self assert: opened size equals: 1.
+	child := instance subFlowInstances first.
+	"it really lives on the child, not on the instance that was run"
+	self assert: child waitingRegistry entries asArray equals: opened asArray.
+	self assert: instance waitingRegistry entries isEmpty.
+	"and is signalable through the outer instance"
+	self assert: (instance signal: opened first correlationId with: 7)
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testWaitingSpotsOpenedAnswersOnlyTheNewOneOnResume [
+	"the assertion the difference exists for. A submit consumes one waiting spot and opens
+	the next one in the same run - every page of a multi-page form does this - and only
+	the new one may be answered. A list kept along the way would have to be cleared at
+	just the right moment to get this right; a difference is right by construction"
+	| instance first second |
+	instance := self flowWithTwoExternalTriggersInSequence newInstance.
+	first := (instance waitingSpotsOpenedDuring: [ instance executeWith: 1 ]) first.
+	self assert: first suspension waitingNode name equals: 'page 1'.
+
+	second := instance waitingSpotsOpenedDuring: [
+		instance signal: first correlationId with: 'PAGE-ONE'.
+		instance execute ].
+
+	self assert: second size equals: 1.
+	self assert: second first suspension waitingNode name equals: 'page 2'.
+	self deny: second first correlationId equals: first correlationId.
+	"the consumed one is gone rather than answered again"
+	self assert: instance openWaitingEntries asArray equals: second asArray.
+	self assert: (instance waitingEntryFor: first correlationId) isNil
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testWaitingSpotsOpenedAnswersTheOneThatOpened [
+	"the plain case, and the one that makes a correlationId usable at all: after a run,
+	the caller is handed the waiting spot that came into being instead of having to ask
+	#openWaitingEntries and work out which of them is new"
+	| instance opened |
+	instance := self flowWithExternalTrigger newInstance.
+
+	opened := instance waitingSpotsOpenedDuring: [ instance executeWith: 1 ].
+
+	self assert: opened size equals: 1.
+	self assert: opened asArray equals: instance openWaitingEntries asArray.
+	self assert: opened first suspension identicalTo: instance suspended first.
+	self assert: opened first correlationId notNil.
+	"and the address really carries - it is what a caller would put into a link"
+	self assert: (instance signal: opened first correlationId with: 7)
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testWaitingSpotsOpenedIgnoresAWaitNotReachableFromOutside [
+	"a condition wait parks but has no waker outside the image, so it registers nothing and
+	is not answered either. The answer is about addresses handed out, not about what blocks
+	the instance - #suspended is the reader for that"
+	| instance opened |
+	instance := self flowWaitingForever newInstance.
+
+	opened := instance waitingSpotsOpenedDuring: [ instance executeWith: 1 ].
+
+	self assert: opened isEmpty.
+	"the wait is real all the same"
+	self assert: instance state equals: #waiting.
+	self assert: instance suspended size equals: 1
 ]
 
 { #category : 'private' }
