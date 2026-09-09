@@ -29,7 +29,9 @@ resolvable for weeks. Same choice as FBFlowInstance>>activations and #joinStates
 which FBBaseExecutor's comment calls out as deliberately not executor-local state.
 
 A wait inside a local sub flow is registered on the child instance, where its
-suspension is: the child holds no reference back to its caller. Resolving from
+suspension is: the child instance holds no reference back to its caller (its first
+token does, see FBFlowInstance>>descendFrom:, which is how a reservation made by the
+caller is found before a second address is minted). Resolving from
 outside therefore walks the chain of active instances - FBFlowInstance>>waitingEntryFor:
 does that - which is the same two-level split #suspended already has, one level up.
 

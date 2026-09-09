@@ -14,14 +14,11 @@ I resolve when I am signalled, not when the wait parks. Redeeming at parking tim
 shut the door on sub flows for good: a reservation handed out in an outer instance for a
 form inside a local sub flow is invisible to the child, which holds no reference back to
 its caller. Resolving through FBFlowInstance>>activeExecutors walks the chain instead.
-That said, a sub flow is NOT reached today either - not because of the search, but
-because the token chain does not cross the boundary: FBSubFlowBehavior hands the child
-only its initial value and the child's start activation mints a root token of its own,
-so nothing in the child descends from my anchor. Resolving at signal time is what makes
-that a matter of one missing #parent link rather than of this design; see the roadmap.
-What parking does in the meantime is skip minting a second address when I already stand
-for the wait (FBBaseActivation>>waitForNode:withToken:, through #reservesWaitAt:forToken:),
-which works within one instance.
+A sub flow is reached because FBFlowInstance>>descendFrom: links the child's first token
+to the caller's, so a wait inside it descends from my anchor like any other. What parking
+does is skip minting a second address when I already stand for the wait
+(FBBaseActivation>>waitForNode:withToken:, through #reservesWaitAt:forToken:, looked for
+along the strand), so there is one address per wait, however deep it parks.
 
 Unlike a plain entry I am NOT spent when I cannot be resolved: a signal that arrives before
 the flow has reached my node - a click on the mail link too early - answers false and
@@ -76,8 +73,7 @@ FBWaitingReservation >> resumeIn: anInstance with: aValue [
 	anchor - and hand it aValue. Answers whether one was there.
 
 	Searched over the chain of active executors, so that a wait in a sub flow of the
-	instance that handed me out will be found once tokens descend across that boundary
-	(they do not yet, see my class comment). The token is what individuates: #suspended may hold
+	instance that handed me out is found too. The token is what individuates: #suspended may hold
 	the same transition once per parallel iteration, so the matching token is taken off
 	the queue first and the resume is then made with exactly that one.
 

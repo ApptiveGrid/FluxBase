@@ -71,18 +71,43 @@ FBWaitingRegistryTest >> linkNodeReservingAt: aNode into: aCollection [
 ]
 
 { #category : 'tests' }
-FBWaitingRegistryTest >> testAReservationDoesNotReachAWaitInsideASubFlowYet [
-	"a limit, pinned so that it cannot move silently. A reservation handed out in the outer
-	instance for a trigger inside a local sub flow is found by nothing: the search walks
-	the chain of active executors and does reach the child's suspension, but the child's
-	start activation mints a root token of its own (FBBaseExecutor>>scheduleStart,
-	FBSubFlowBehavior>>execute hands over only the initial value), so no token in the
-	child descends from the anchor and #hasAncestor: says no.
+FBWaitingRegistryTest >> testAReservationOfAFinishedInstanceIsNotOpen [
+	"a link node reserved an address for a node the flow then never reached - a condition
+	ahead of the form did not hold, or, as here, the node is simply not on the way. The
+	instance finishes with the reservation still in its registry, because nothing in
+	FluxBase runs at the moment an instance ends. What has to hold all the same: nothing
+	is reported open, a signal on the dead address is without effect, and a run that
+	ended answers no opened waiting spots even though one was reserved on the way"
+	| start link never flow instance handedOut |
+	handedOut := OrderedCollection new.
+	never := FBTriggerTask named: 'never reached'.
+	start := FBStartEvent new.
+	link := self linkNodeReservingAt: never into: handedOut.
+	start --> link --> FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
 
-	The wait, not seeing the reservation, registers an address of its own - so the
-	instance shows two addresses for one wait, and only the child's works. What opens
-	this is one #parent link from the child's first token to the caller's, at which point
-	this test turns around and the reservation resolves through the outer instance"
+	self assert: (instance waitingSpotsOpenedDuring: [ instance executeWith: 1 ]) isEmpty.
+
+	self assert: instance state equals: #done.
+	self assert: handedOut size equals: 1.
+	"the address exists, but nothing is open"
+	self assert: instance waitingRegistry entries asArray equals: handedOut asArray.
+	self assert: (instance waitingEntryFor: handedOut first correlationId) identicalTo: handedOut first.
+	self assert: instance openWaitingEntries isEmpty.
+	self deny: (instance signal: handedOut first correlationId with: 7)
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testAReservationReachesAWaitInsideASubFlow [
+	"a reservation handed out in the outer instance for a trigger inside a local sub flow
+	is the one address of that wait: the child's first token descends from the caller's
+	(FBFlowInstance>>descendFrom:), so the wait sees the reservation when it parks and
+	mints nothing of its own, and the signal resolves through the outer instance - the
+	one an outward address names.
+
+	Until 2026-09-09 this test pinned the opposite: the token chain stopped at the sub
+	flow boundary, the child registered a second address, and only that one worked"
 	| inner start trigger outerLink flow instance handedOut child |
 	handedOut := OrderedCollection new.
 	trigger := FBTriggerTask named: 'trigger'.
@@ -99,15 +124,18 @@ FBWaitingRegistryTest >> testAReservationDoesNotReachAWaitInsideASubFlowYet [
 	child := instance subFlowInstances first.
 	self assert: handedOut size equals: 1.
 	self assert: instance suspended first waitingNode identicalTo: trigger.
-	"the child registered its own address next to the reservation"
-	self assert: instance openWaitingEntries size equals: 2.
-	self assert: child waitingRegistry entries size equals: 1.
-	"and the reservation does not resolve - answers false and stays"
-	self deny: (instance signal: handedOut first correlationId with: 7).
-	self assert: (instance waitingEntryFor: handedOut first correlationId) identicalTo: handedOut first.
-	self assert: instance suspended size equals: 1.
-	"while the child's own address does"
-	self assert: (instance signal: child waitingRegistry entries first correlationId with: 7)
+	"one wait, one address: the reservation, and nothing registered by the child"
+	self assert: instance openWaitingEntries asArray equals: handedOut asArray.
+	self assert: child waitingRegistry entries isEmpty.
+	"the child's strand really descends from the caller's"
+	self assert: (child activations first token
+		hasAncestor: (instance activations detect: [ :each | each node == outerLink ]) token).
+	"and the reservation resolves through the outer instance, then the flow runs to its end"
+	self assert: (instance signal: handedOut first correlationId with: 7).
+	instance execute.
+	self assert: (child activations detect: [ :each | each node == trigger ]) argument equals: 7.
+	self assert: instance state equals: #done.
+	self assert: instance openWaitingEntries isEmpty
 ]
 
 { #category : 'tests' }

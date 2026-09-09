@@ -43,6 +43,9 @@ FBSubFlowBehavior >> execute [
     childInstance scope: childScope.
     "initialize the child's executor and initial value without executing anything"
     childInstance initialValue: self argument.
+    "the child's first token descends from this activation's, so that a waiting spot
+    reserved out here - a link that went into a mail - is reached inside the sub flow"
+    childInstance descendFrom: activation token.
     activation flowInstance
         addSubFlowInstance: childInstance;
         pushExecutor: (FBSubFlowExecutor new

@@ -147,6 +147,27 @@ FBFlowInstance >> buildRootExecutor [
 			scheduleStart 
 ]
 
+{ #category : 'executing' }
+FBFlowInstance >> descendFrom: aToken [
+	"my first strand descends from aToken - the token of the activation that calls me as a
+	sub flow. #scheduleStart queued my start without a token so that the start activation
+	mints a root token; put one on that work item instead, and FBFlowExecutor>>step hands
+	it to the start activation the way it hands every other queued token on.
+
+	Only #parent is set, not #splitId or #scope: a sub flow is a call, not a branch of the
+	caller's split, and it opens a scope of its own (FBSubFlowBehavior>>buildChildScope).
+	Sequence, not nesting - the same relation FBBaseActivation>>childToken records.
+
+	This is what lets an address handed out in the calling instance reach a wait in me:
+	FBWaitingReservation resolves by token ancestry, and without this link no token of mine
+	descended from anything outside. It is also the one reference from a child back up -
+	through the token, not the instance - and FBBaseActivation>>waitForNode:withToken:
+	uses it to find a reservation made upstream"
+
+	self initializeExecutor.
+	executor firstPending token: (FBToken new parent: aToken; yourself)
+]
+
 { #category : 'accessing' }
 FBFlowInstance >> events [
 	^ events 
@@ -387,6 +408,12 @@ FBFlowInstance >> openWaitingEntries [
 	The same view over the chain of active instances that #suspended is over their
 	executors, one level up"
 
+	"A finished instance has no open waiting spot, whatever still lies in its registry: a
+	reservation handed out for a node the flow then never reached is dead there. Nothing
+	removes it - FluxBase has no moment 'the instance ended', #done is a derived answer and
+	nobody observes the transition - so the reader answers correctly instead. #waitingEntryFor:
+	still finds such an address; it answers 'does this address exist', not 'is anything open'"
+	(executor notNil and: [ self isDone ]) ifTrue: [ ^ #() ].
 	^ self activeFlowInstances flatCollect: [ :each | each waitingRegistry entries ]
 ]
 
