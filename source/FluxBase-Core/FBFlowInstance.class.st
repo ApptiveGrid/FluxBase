@@ -604,6 +604,37 @@ FBFlowInstance >> waitingRegistry [
 	^ waitingRegistry ifNil: [ FBWaitingRegistry new ]
 ]
 
+{ #category : 'executing' }
+FBFlowInstance >> waitingSpotsOpenedDuring: aBlock [
+	"run aBlock and answer the externally reachable waiting spots that came into being
+	while it ran. A collection and not a single value: an AND split into two forms leaves
+	two, and the caller that turns them into links and schedules has to see both.
+
+	This is how a correlationId reaches the outside at all. It is minted when a wait parks
+	(FBBaseActivation>>waitForNode:withToken:) and nothing announces it there, so without
+	this a caller could only ask #openWaitingEntries afterwards and work out which of them
+	is new.
+
+	Read over the chain of active instances rather than announced, because a wait modelled
+	in a local sub flow registers on the child instance and that child holds no reference
+	back to its caller - an announcement there would reach nobody watching the outermost
+	instance, which is the one an outward address names. Same chain #suspended and
+	#openWaitingEntries already walk.
+
+	A difference rather than a list kept along the way, so that no second structure has to
+	be held in agreement with the registry - and because a difference is still right when
+	the same run consumes one waiting spot and opens another, which is what every submit
+	of a multi-page form does.
+
+	Runs nothing itself: aBlock decides how far the flow goes, be that #executeWith:, a
+	series of #step, or a resume."
+
+	| before |
+	before := self openWaitingEntries asIdentitySet.
+	aBlock value.
+	^ self openWaitingEntries reject: [ :each | before includes: each ]
+]
+
 { #category : 'as yet unclassified' }
 FBFlowInstance >> whenAnnounced: aClass do: aBlock [
 
