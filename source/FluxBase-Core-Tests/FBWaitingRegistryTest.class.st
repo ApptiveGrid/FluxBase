@@ -60,6 +60,119 @@ FBWaitingRegistryTest >> flowWithTwoExternalTriggersInSequence [
 	^ FBFlow new start: start
 ]
 
+{ #category : 'private' }
+FBWaitingRegistryTest >> linkNodeReservingAt: aNode into: aCollection [
+	"a task standing in for ApptiveGrid's link node: it hands out an address for the wait
+	that will be at aNode on its own strand, ahead of that wait, and keeps it in
+	aCollection - the way the real one would put it into a mail"
+	^ (FBPluggableTask named: 'link') block: [ :act |
+		aCollection add: (act flowInstance reserveWaitingSpotAt: aNode anchoredAt: act token).
+		act value: act argument ]
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testAReservationDoesNotReachAWaitInsideASubFlowYet [
+	"a limit, pinned so that it cannot move silently. A reservation handed out in the outer
+	instance for a trigger inside a local sub flow is found by nothing: the search walks
+	the chain of active executors and does reach the child's suspension, but the child's
+	start activation mints a root token of its own (FBBaseExecutor>>scheduleStart,
+	FBSubFlowBehavior>>execute hands over only the initial value), so no token in the
+	child descends from the anchor and #hasAncestor: says no.
+
+	The wait, not seeing the reservation, registers an address of its own - so the
+	instance shows two addresses for one wait, and only the child's works. What opens
+	this is one #parent link from the child's first token to the caller's, at which point
+	this test turns around and the reservation resolves through the outer instance"
+	| inner start trigger outerLink flow instance handedOut child |
+	handedOut := OrderedCollection new.
+	trigger := FBTriggerTask named: 'trigger'.
+	inner := FBFlow new start: (FBStartEvent new addOutgoingNode: trigger; yourself).
+	trigger addOutgoingNode: FBEndEvent new.
+	start := FBStartEvent new.
+	outerLink := self linkNodeReservingAt: trigger into: handedOut.
+	start --> outerLink.
+	(outerLink addOutgoingNode: FBSubFlowNode new) subFlow: inner; addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+
+	child := instance subFlowInstances first.
+	self assert: handedOut size equals: 1.
+	self assert: instance suspended first waitingNode identicalTo: trigger.
+	"the child registered its own address next to the reservation"
+	self assert: instance openWaitingEntries size equals: 2.
+	self assert: child waitingRegistry entries size equals: 1.
+	"and the reservation does not resolve - answers false and stays"
+	self deny: (instance signal: handedOut first correlationId with: 7).
+	self assert: (instance waitingEntryFor: handedOut first correlationId) identicalTo: handedOut first.
+	self assert: instance suspended size equals: 1.
+	"while the child's own address does"
+	self assert: (instance signal: child waitingRegistry entries first correlationId with: 7)
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testAReservationResolvesToTheWaitThatParksAfterIt [
+	"the mail case: the address exists before the wait does. A link node hands it out, the
+	flow runs on and parks at the trigger, and the address - handed out when nothing was
+	waiting - resolves to exactly that wait. The wait minted no second address of its own,
+	because the reservation already stood for it"
+	| start trigger link flow instance handedOut |
+	handedOut := OrderedCollection new.
+	start := FBStartEvent new.
+	trigger := FBTriggerTask named: 'trigger'.
+	link := self linkNodeReservingAt: trigger into: handedOut.
+	start --> link --> trigger --> FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+
+	self assert: handedOut size equals: 1.
+	self assert: instance state equals: #waiting.
+	"one wait, one address - the reservation, not a registration next to it"
+	self assert: instance openWaitingEntries asArray equals: handedOut asArray.
+	self assert: handedOut first waitingNode identicalTo: trigger.
+
+	self assert: (instance signal: handedOut first correlationId with: 7).
+	instance execute.
+
+	self assert: (instance activations detect: [ :each | each node == trigger ]) argument equals: 7.
+	self assert: instance openWaitingEntries isEmpty.
+	self assert: instance state equals: #done.
+	self deny: (instance signal: handedOut first correlationId with: 99)
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testASignalBeforeTheReservedWaitParksIsSilentAndKeepsTheReservation [
+	"a click on the mail link before the flow has reached the form. Nothing resumes, and
+	the address is NOT spent - unlike a plain entry, which names a wait that is over the
+	moment it cannot be found. The reservation stands for a wait that may still come,
+	and once it does, the same address resolves"
+	| start link wait trigger flow instance handedOut |
+	handedOut := OrderedCollection new.
+	start := FBStartEvent new.
+	trigger := FBTriggerTask named: 'trigger'.
+	link := self linkNodeReservingAt: trigger into: handedOut.
+	wait := FBPluggableWait new condition: [ :each | false ]; yourself.
+	start --> link --> wait --> trigger --> FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+
+	"parked at the condition wait, the trigger not reached yet"
+	self assert: instance suspended asArray equals: { wait }.
+	self deny: (instance signal: handedOut first correlationId with: 7).
+	self assert: (instance waitingEntryFor: handedOut first correlationId) identicalTo: handedOut first.
+	self assert: instance suspended asArray equals: { wait }.
+
+	"the flow gets there later, and the address that was handed out early is the one"
+	instance resumeWaitingAt: wait with: 1.
+	instance execute.
+	self assert: instance suspended first waitingNode identicalTo: trigger.
+	self assert: (instance signal: handedOut first correlationId with: 7).
+	instance execute.
+	self assert: instance state equals: #done
+]
+
 { #category : 'tests' }
 FBWaitingRegistryTest >> testASuspensionWithoutRegistrationHasNoEntry [
 	"the registry is a selection out of #suspended and not a mirror of it: this condition
@@ -155,6 +268,49 @@ FBWaitingRegistryTest >> testReadingTheRegistryDoesNotCreateOne [
 	instance takeWaitingEntryFor: 'never registered'.
 
 	self assert: (instance instVarNamed: 'waitingRegistry') isNil
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testReservationsInAParallelScopeEachResolveToTheirOwnIteration [
+	"the case the reservation exists for. A link node inside a parallel scope runs once per
+	iteration and reserves once per iteration; the trigger behind it parks the very same
+	transition object once per iteration, so #suspended cannot tell the two waits apart -
+	only their tokens can. Signalling the second reservation has to resume the second
+	iteration's wait and leave the first iteration its own token.
+
+	This is what a node-based address can never do: both iterations wait at the same node"
+	| start fork trigger link flow instance handedOut executor transition remaining |
+	handedOut := OrderedCollection new.
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	trigger := FBTriggerTask named: 'trigger'.
+	link := fork addOutgoingNode: (self linkNodeReservingAt: trigger into: handedOut).
+	link --> trigger --> FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+
+	"two iterations, two reservations, and both waits are on one and the same transition"
+	self assert: handedOut size equals: 2.
+	self deny: handedOut first correlationId equals: handedOut second correlationId.
+	executor := instance activeExecutors detect: [ :each | each suspended notEmpty ].
+	self assert: executor suspended size equals: 2.
+	self assert: executor suspended first == executor suspended second.
+	transition := executor suspended first.
+	"and the reservations are the only addresses - no registration was minted next to them"
+	self assert: instance openWaitingEntries size equals: 2.
+
+	self assert: (instance signal: handedOut second correlationId with: 'B').
+
+	"the second iteration's wait went on, under the token descending from its own link"
+	self assert: ((instance activations detect: [ :each | each node == trigger ]) token
+		hasAncestor: handedOut second anchorToken).
+	"the first iteration still waits, and the token left in the queue is ITS token"
+	self assert: executor suspended size equals: 1.
+	remaining := executor takeTokenForSuspended: transition.
+	self assert: (remaining hasAncestor: handedOut first anchorToken).
+	self deny: (remaining hasAncestor: handedOut second anchorToken).
+	self assert: instance openWaitingEntries asArray equals: { handedOut first }
 ]
 
 { #category : 'tests' }

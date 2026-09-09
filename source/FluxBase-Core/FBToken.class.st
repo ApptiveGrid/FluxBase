@@ -83,6 +83,32 @@ FBToken >> activation: anFBBaseActivation [
 	activation := anFBBaseActivation
 ]
 
+{ #category : 'testing' }
+FBToken >> hasAncestor: aToken [
+	"did I come out of aToken? Walks the #parent chain, which
+	FBBaseActivation>>childToken builds one link at a time.
+
+	This is what tells two iterations of a parallel scope apart:
+	FBParallelExecutor>>scopeToken mints a fresh child token of the fork's activation for
+	each of them, so every iteration has a chain of its own from that point on. Node
+	identity cannot do it - the same node parks once per iteration - and neither can the
+	suspension, since #suspended holds the very same transition object n times.
+
+	Not reflexive: a token is not its own ancestor. A waiting spot always carries a child
+	of the token that reserved an address for it, never that token itself.
+
+	By identity, and only along real #parent references - a token persisted before
+	#parent became a reference carries just #parentId and stops the walk. Those are from
+	before reservations existed, so none of them is an anchor"
+
+	| each |
+	each := parent.
+	[ each notNil ] whileTrue: [
+		each == aToken ifTrue: [ ^ true ].
+		each := each parent ].
+	^ false
+]
+
 { #category : 'as yet unclassified' }
 FBToken >> id [
 	^ id
