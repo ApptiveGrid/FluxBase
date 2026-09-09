@@ -211,6 +211,18 @@ FBBaseActivation >> token: aFBToken [
 ]
 
 { #category : 'accessing' }
+FBBaseActivation >> resumed [
+	"the wait #waiting marked is over. The mark lives on my token (see #waiting), so it is
+	taken back there. An activation persisted before tokens existed keeps the mark in
+	its own field: for it the step had finished when it parked (FBTaskBehavior>>execute
+	marks #done before it follows), so #done is what the field goes back to"
+	token ifNil: [
+		state = #waiting ifTrue: [ state := #done ].
+		^ self ].
+	token resumed
+]
+
+{ #category : 'accessing' }
 FBBaseActivation >> sourceNode [
 	"The node I arrived from, i.e. which of my node's incoming transitions was actually
 	taken to produce me. Not derivable from the graph - my node may have several

@@ -70,7 +70,8 @@ FBWaitingReservation >> reservesWaitAt: aNode forToken: aToken [
 { #category : 'resuming' }
 FBWaitingReservation >> resumeIn: anInstance with: aValue [
 	"find the wait I stand for - at my target node, on a strand descending from my
-	anchor - and hand it aValue. Answers whether one was there.
+	anchor - and hand it aValue. Answers the activation that went on, or nil when no
+	such wait has parked yet.
 
 	Searched over the chain of active executors, so that a wait in a sub flow of the
 	instance that handed me out is found too. The token is what individuates: #suspended may hold
@@ -95,9 +96,8 @@ FBWaitingReservation >> resumeIn: anInstance with: aValue [
 							anInstance takeWaitingEntryFor: correlationId.
 							"the token is already off the queue, so the take inside #resume:
 							withToken:value: finds nothing and consumes no other"
-							executor resume: found withToken: token value: aValue.
-							^ true ] ] ].
-	^ false
+							^ executor resume: found withToken: token value: aValue ] ] ].
+	^ nil
 ]
 
 { #category : 'accessing' }

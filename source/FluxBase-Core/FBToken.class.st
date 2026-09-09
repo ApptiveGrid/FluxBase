@@ -41,8 +41,8 @@ before this: for those #parent is nil and FBBaseActivation>>sourceNode falls bac
 to resolving the old id. Nothing writes them any more, and they can be dropped
 once no such tokens are left in any store.
 
-My #state says whether this strand is running or parked: #ready or #waiting, and
-#cancelled once cancellation exists. There is no #done - a strand ends by my
+My #state says whether this strand is running or parked: #ready or #waiting - and #ready
+again once the wait was resumed (#resumed) - and #cancelled once cancellation exists. There is no #done - a strand ends by my
 disappearing, not by my carrying a state that says so. A wait outlives the step that
 started it, which is why it is mine and not the activation's; the three step
 statements - #created, #done, #error - stay on FBBaseActivation, and its #state
@@ -181,6 +181,15 @@ FBToken >> scopeId [
 	"Only for tokens persisted before #scope became a real reference; nothing writes
 	this any more. See my class comment."
 	^ scope ifNil: [ scopeId ] ifNotNil: [ :each | each id ]
+]
+
+{ #category : 'accessing' }
+FBToken >> resumed [
+	"the wait I was parked at is over and my strand goes on - back to #ready. Sent by
+	the suspension that resumes (FBNode>>resumeIn:withToken:value:,
+	FBTransition>>resumeIn:withToken:value:); without it a resumed strand would report
+	#waiting for good, and so would the activation reading its state off me"
+	state := #ready
 ]
 
 { #category : 'accessing' }

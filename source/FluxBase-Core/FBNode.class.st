@@ -425,12 +425,21 @@ FBNode >> resumeIn: anExecutor withToken: aToken value: aValue [
 
 	Taking the parked activation back up rather than minting a fresh one is what keeps
 	the branch identity across a condition wait - see
-	FBWaitForConditionBehaviorTest>>testResumingAConditionWaitBehindASplitCompletesTheJoin"
+	FBWaitForConditionBehaviorTest>>testResumingAConditionWaitBehindASplitCompletesTheJoin.
+
+	The activation marked itself #waiting when it parked (FBBaseActivation>>waitForNode:
+	withToken:), so it is the one to take out of that here - and the one to mark #done,
+	in the order FBTaskBehavior>>execute uses: value, done, follow. Nothing marks a
+	step done centrally, and a wait that only followed on would stay #created for good.
+	Answers the activation"
 
 	| activation |
 	activation := anExecutor activationOf: self.
+	activation resumed.
 	activation value: aValue.
-	activation followAllOutgoing
+	activation done.
+	activation followAllOutgoing.
+	^ activation
 ]
 
 { #category : 'accessing' }

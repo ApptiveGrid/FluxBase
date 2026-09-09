@@ -620,10 +620,24 @@ FBFlowInstance >> signal: aCorrelationId with: aValue [
 	of addressing a wait by node, but is not developed further: node identity cannot
 	name a waiting spot, which is what a correlationId is for"
 
-	| entry |
+	^ self signal: aCorrelationId with: aValue ifResumed: [ :activation | ]
+]
+
+{ #category : 'executing' }
+FBFlowInstance >> signal: aCorrelationId with: aValue ifResumed: aBlock [
+	"#signal:with:, and aBlock gets the activation that went on when something did - the
+	one taken back up, or the one minted for a parked transition. For whoever has to
+	say something about that step: ApptiveGrid records who submitted on it. Answers
+	whether anything was resumed, like #signal:with:; on a silent signal aBlock is not
+	evaluated"
+
+	| entry activation |
 	entry := self waitingEntryFor: aCorrelationId.
 	entry ifNil: [ ^ false ].
-	^ entry resumeIn: self with: aValue
+	activation := entry resumeIn: self with: aValue.
+	activation ifNil: [ ^ false ].
+	aBlock value: activation.
+	^ true
 ]
 
 { #category : 'accessing' }
