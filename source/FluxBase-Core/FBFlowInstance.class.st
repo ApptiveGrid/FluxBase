@@ -168,6 +168,23 @@ FBFlowInstance >> descendFrom: aToken [
 	executor firstPending token: (FBToken new parent: aToken; yourself)
 ]
 
+{ #category : 'executing' }
+FBFlowInstance >> dropWaitingEntriesMatching: aSuspension [
+	"forget every address of mine that names aSuspension - the step a continuation makes
+	before it takes the suspension out, see FBBaseExecutor>>resume:withToken:value:.
+
+	Mine only, by design: an entry is registered on the instance whose executor holds the
+	suspension (FBBaseActivation>>waitForNode:withToken:), and the executor resuming is
+	that one. A reservation names a node ahead of its wait, not a suspension, answers
+	FBWaitingAddress>>matchesSuspension: with false and stands until it resumed something
+	itself. Read off #waitingRegistry, which answers a throwaway when nothing was ever
+	registered here - then there is nothing to forget and nothing is created"
+
+	(waitingRegistry ifNil: [ ^ self ]) entries
+		select: [ :each | each matchesSuspension: aSuspension ]
+		thenDo: [ :each | waitingRegistry takeEntryFor: each correlationId ]
+]
+
 { #category : 'accessing' }
 FBFlowInstance >> events [
 	^ events 

@@ -81,9 +81,9 @@ FBWaitingReservation >> resumeIn: anInstance with: aValue [
 	a signal that arrives before the flow has parked at my node answers false and leaves
 	me standing for the wait that may still come.
 
-	A wait that parked without seeing me - in a sub flow, once that is reachable - has
-	registered an address of its own; that entry now names a suspension that is over and
-	is dropped along the way, the way ApptiveGrid's resume paths drop theirs"
+	A wait that parked without seeing me has registered an address of its own; that entry
+	names a suspension that is over once I resumed it, and the resume drops it - see
+	FBBaseExecutor>>resume:withToken:value:, which clears that for every continuation"
 
 	anInstance activeExecutors do: [ :executor |
 		(executor suspended detect: [ :each | each waitingNode == targetNode ] ifNone: [ nil ])
@@ -93,8 +93,6 @@ FBWaitingReservation >> resumeIn: anInstance with: aValue [
 					satisfying: [ :each | each hasAncestor: anchorToken ])
 						ifNotNil: [ :token |
 							anInstance takeWaitingEntryFor: correlationId.
-							(anInstance openWaitingEntries select: [ :each | each matchesSuspension: found ])
-								do: [ :each | anInstance takeWaitingEntryFor: each correlationId ].
 							"the token is already off the queue, so the take inside #resume:
 							withToken:value: finds nothing and consumes no other"
 							executor resume: found withToken: token value: aValue.

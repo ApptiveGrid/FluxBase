@@ -71,6 +71,28 @@ FBWaitingRegistryTest >> linkNodeReservingAt: aNode into: aCollection [
 ]
 
 { #category : 'tests' }
+FBWaitingRegistryTest >> testANodeAddressedResumeDropsTheEntryOfItsSuspension [
+	"a wait continued by node rather than by its address is over all the same, and its
+	address has to go with it - otherwise #openWaitingEntries would report a wait that is
+	not there and the entry would sit in the persisted instance for good. The dropping is
+	the resume's own step, FBBaseExecutor>>resume:withToken:value:, so that every way of
+	continuing clears it and no caller has to know. A reservation at the same node is not
+	the suspension's address and stands: it names a wait that may still come"
+	| instance wait entry reservation |
+	instance := self flowWaitingForeverFromOutside newInstance.
+	instance executeWith: 1.
+	wait := instance suspended first.
+	entry := instance openWaitingEntries first.
+	reservation := instance reserveWaitingSpotAt: wait anchoredAt: FBToken new.
+
+	instance resumeWaitingAt: wait with: 7.
+
+	self assert: (instance waitingEntryFor: entry correlationId) isNil.
+	self assert: (instance waitingEntryFor: reservation correlationId) identicalTo: reservation.
+	self deny: (instance signal: entry correlationId with: 8)
+]
+
+{ #category : 'tests' }
 FBWaitingRegistryTest >> testAReservationOfAFinishedInstanceIsNotOpen [
 	"a link node reserved an address for a node the flow then never reached - a condition
 	ahead of the form did not hold, or, as here, the node is simply not on the way. The
@@ -339,6 +361,41 @@ FBWaitingRegistryTest >> testReservationsInAParallelScopeEachResolveToTheirOwnIt
 	self assert: (remaining hasAncestor: handedOut first anchorToken).
 	self deny: (remaining hasAncestor: handedOut second anchorToken).
 	self assert: instance openWaitingEntries asArray equals: { handedOut first }
+]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testResumingATransitionWithoutNamingATokenGoesOnWithTheParkedOne [
+	"#resume:withToken:value: with a nil token means 'whichever token the suspension
+	parked with' - and that one has to be the token the continuation goes on with, not
+	merely the one taken off the queue. The same split-and-join as
+	#testSignalBehindASplitCompletesTheJoin, continued without naming the token: were the
+	taken token dropped, the trigger's fresh activation would carry a default token with
+	no #splitId, and the join would hold the two arrivals apart for good"
+	| start split trigger other join end flow instance holder transition |
+	start := FBStartEvent new.
+	split := FBAndSplit named: 'split'.
+	trigger := FBTriggerTask named: 'trigger'.
+	other := FBTask named: 'other'.
+	join := FBAndJoin named: 'join'.
+	end := FBEndEvent new.
+	start --> split.
+	split --> trigger --> join.
+	split --> other --> join.
+	join --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 42.
+	self assert: instance suspended asArray equals: { trigger incoming first }.
+	transition := instance suspended first.
+	holder := instance activeExecutors detect: [ :each | each suspended notEmpty ].
+
+	holder resume: transition withToken: nil value: 7.
+	instance execute.
+
+	self assert: (instance activations detect: [ :each | each node == trigger ]) argument equals: 7.
+	self assert: (instance activations anySatisfy: [ :each | each node == end ]).
+	self assert: instance state equals: #done.
+	self assert: (holder takeTokenForSuspended: transition) isNil
 ]
 
 { #category : 'tests' }
