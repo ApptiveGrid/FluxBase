@@ -13,12 +13,15 @@ does with it - HTTP, a queue, a test block - is not my business (FBRemoteDispatc
 
 The result comes back as an impulse from outside, FBFlowInstance>>signal:with: with the
 correlationId the callback carries, and I go on through my result transitions: a value
-takes the #success transition, or the untagged ones; an FBRemoteFlowTimedOut takes the
-#timedOut transition, and stops me in error when none is modelled - the way a sub flow
-call errors without an #error transition. A second impulse under the same address is
-silent, that is the registry's promise, and so is a callback that arrives after the
-timeout or a timeout that fires after the callback: whichever comes first consumes the
-address.
+takes the #success transition, or the untagged ones; an FBRemoteFlowOutcome - a timeout
+or a failure the other side reported - takes the transition it names, #timedOut or
+#error, and stops me in error when that one is not modelled, the way a sub flow call
+errors without an #error transition. A second impulse under the same address is silent,
+that is the registry's promise, and so is a callback that arrives after the timeout or a
+timeout that fires after the callback: whichever comes first consumes the address.
+
+What goes out as the remote flow's input is #inputValueFor:, my activation's argument
+unless a subclass assembles it from its own configuration.
 
 	targetFlowName	what the other side is to run - meaning is the port's
 	maxWait		how long to wait for the result before a timeout, or nil for ever;
@@ -71,6 +74,15 @@ FBRemoteFlowTask >> dispatchPort: aDispatchPort [
 	dispatchPort := aDispatchPort
 ]
 
+{ #category : 'accessing' }
+FBRemoteFlowTask >> inputValueFor: anActivation [
+	"what the remote flow gets as its input when I run for anActivation: my argument, the
+	value that reached me. A subclass that lets a modeller map fields onto the remote
+	flow's schema assembles the input from those instead - the hook FBRemoteFlowBehavior
+	reads, so that the behavior stays the same on both sides of that difference"
+	^ anActivation argument
+]
+
 { #category : 'testing' }
 FBRemoteFlowTask >> isExternallyResumable [
 	"my waker is the callback from the other side - outside the image by definition"
@@ -95,8 +107,8 @@ FBRemoteFlowTask >> resumeIn: anExecutor withToken: aToken value: aValue [
 	| activation |
 	activation := anExecutor activationOf: self.
 	activation value: aValue.
-	(aValue isKindOf: FBRemoteFlowTimedOut)
-		ifTrue: [ self timedOut: activation ]
+	(aValue isKindOf: FBRemoteFlowOutcome)
+		ifTrue: [ self didNotSucceed: aValue in: activation ]
 		ifFalse: [ self succeeded: activation ]
 ]
 
@@ -124,17 +136,17 @@ FBRemoteFlowTask >> targetFlowName: aString [
 ]
 
 { #category : 'resuming' }
-FBRemoteFlowTask >> timedOut: anActivation [
-	"no result within #maxWait: the #timedOut transition, or - none modelled - the
-	activation stops in error, recorded the way FBFlowInstance>>activateProtected: would
-	have recorded it. Not signalled as an error: this runs inside an impulse from outside
-	(FBFlowInstance>>signal:with:), not inside the activation's protected block, so a
-	signal here would escape to the caller and record nothing on the activation - the
+FBRemoteFlowTask >> didNotSucceed: anOutcome in: anActivation [
+	"a timeout or a reported failure: the transition the outcome names, or - none modelled
+	- the activation stops in error, recorded the way FBFlowInstance>>activateProtected:
+	would have recorded it. Not signalled as an error: this runs inside an impulse from
+	outside (FBFlowInstance>>signal:with:), not inside the activation's protected block,
+	so a signal here would escape to the caller and record nothing on the activation - the
 	same reason FBSubFlowExecutor>>failCallerWith: marks instead of signals"
-	(outgoing detect: [ :each | each resultName = #timedOut ] ifNone: [ nil ])
+	(outgoing detect: [ :each | each resultName = anOutcome resultName ] ifNone: [ nil ])
 		ifNotNil: [ :transition | ^ anActivation followTransition: transition ].
 	anActivation errored.
 	anActivation flowInstance addEvent: (FBNodeActivationErrored new
 		activation: anActivation;
-		activationError: 'remote flow timed out and no #timedOut transition is modelled')
+		activationError: anOutcome description, ' and no #', anOutcome resultName, ' transition is modelled')
 ]

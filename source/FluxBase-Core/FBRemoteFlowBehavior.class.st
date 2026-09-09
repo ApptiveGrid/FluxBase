@@ -28,7 +28,8 @@ FBRemoteFlowBehavior >> execute [
 		correlationId: address correlationId;
 		callbackAddress: (FBCallbackAddress locator: port locator correlationId: address correlationId);
 		targetFlowName: self node targetFlowName;
-		inputValue: self argument;
+		inputValue: (self node inputValueFor: activation);
+		flowInstance: activation flowInstance;
 		dispatchedAt: DateAndTime now;
 		yourself.
 	port dispatch: call
