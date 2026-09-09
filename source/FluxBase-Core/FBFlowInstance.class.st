@@ -313,16 +313,6 @@ FBFlowInstance >> hasErrors [
 	^ activations anySatisfy: [ :each | each hasError ]
 ]
 
-{ #category : 'testing' }
-FBFlowInstance >> hasReservationAt: aNode forToken: aToken [
-	"does an address already stand for a wait at aNode on aToken's strand, in me or in an
-	instance executing inside me? Asked by FBBaseActivation>>waitForNode:withToken: so
-	that such a wait does not mint a second address. Walks down the chain only - a
-	reservation in an instance above the parking one is not visible from here and is
-	reconciled when it resolves instead, see FBWaitingReservation>>resumeIn:with:"
-	^ self openWaitingEntries anySatisfy: [ :each | each reservesWaitAt: aNode forToken: aToken ]
-]
-
 { #category : 'accessing' }
 FBFlowInstance >> id [
 
@@ -529,6 +519,19 @@ FBFlowInstance >> registerWaitingToken: aToken suspendedAt: anObject [
 
 	waitingRegistry ifNil: [ waitingRegistry := FBWaitingRegistry new ].
 	^ waitingRegistry registerToken: aToken suspendedAt: anObject
+]
+
+{ #category : 'accessing' }
+FBFlowInstance >> reservationAt: aNode forToken: aToken [
+	"the address that already stands for a wait at aNode on aToken's strand, in me or in
+	an instance executing inside me - or nil. Asked by FBBaseActivation>>waitForNode:
+	withToken: so that such a wait does not mint a second address and answers this one
+	instead. Walks down the chain only - a reservation in an instance above the parking
+	one is not visible from here and is reconciled when it resolves instead, see
+	FBWaitingReservation>>resumeIn:with:"
+	^ self openWaitingEntries
+		detect: [ :each | each reservesWaitAt: aNode forToken: aToken ]
+		ifNone: [ nil ]
 ]
 
 { #category : 'executing' }

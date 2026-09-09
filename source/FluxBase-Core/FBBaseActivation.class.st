@@ -262,18 +262,25 @@ FBBaseActivation >> waitForNode: aSuspension withToken: aToken [
 	(FBNode>>isExternallyResumable, false by default) rather than granted to everything
 	that waits, so a condition wait on a date still gets no entry.
 
+	Answers the address the wait is reachable under - the entry just registered, or the
+	reservation that already stood for it - and nil for a wait nothing outside can reach.
+	A node that has to tell the outside where to come back to, FBRemoteFlowTask, reads
+	its correlationId off this answer; nobody else needs it.
+
 	There used to be a one-argument #waitForNode: passing nil for the token. It lost its
 	last caller when the condition wait started handing over its own token, and is gone:
 	a path that parks without a token is a path that produces an entry with no #splitId."
 	self waiting.
 	executor addWaiting: aSuspension withToken: aToken.
-	aSuspension waitingNode isExternallyResumable ifFalse: [ ^ self ].
+	aSuspension waitingNode isExternallyResumable ifFalse: [ ^ nil ].
 	"an address handed out ahead of this wait - a link that went into a mail before the
 	flow got here - is its address; minting a second one would leave two for one wait.
 	Looked for along the strand, not only in my own instance: the link may have been
 	built in the instance that called this sub flow, and the child's first token descends
 	from the caller's (FBFlowInstance>>descendFrom:)"
-	(aToken notNil and: [ aToken instancesAlongAncestry anySatisfy: [ :each |
-		each hasReservationAt: aSuspension waitingNode forToken: aToken ] ])
-		ifFalse: [ self flowInstance registerWaitingToken: aToken suspendedAt: aSuspension ]
+	aToken ifNotNil: [
+		aToken instancesAlongAncestry do: [ :each |
+			(each reservationAt: aSuspension waitingNode forToken: aToken)
+				ifNotNil: [ :reservation | ^ reservation ] ] ].
+	^ self flowInstance registerWaitingToken: aToken suspendedAt: aSuspension
 ]
