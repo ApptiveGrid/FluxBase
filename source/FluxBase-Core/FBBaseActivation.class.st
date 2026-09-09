@@ -269,7 +269,11 @@ FBBaseActivation >> waitForNode: aSuspension withToken: aToken [
 	executor addWaiting: aSuspension withToken: aToken.
 	aSuspension waitingNode isExternallyResumable ifFalse: [ ^ self ].
 	"an address handed out ahead of this wait - a link that went into a mail before the
-	flow got here - is its address; minting a second one would leave two for one wait"
-	(self flowInstance hasReservationAt: aSuspension waitingNode forToken: aToken)
+	flow got here - is its address; minting a second one would leave two for one wait.
+	Looked for along the strand, not only in my own instance: the link may have been
+	built in the instance that called this sub flow, and the child's first token descends
+	from the caller's (FBFlowInstance>>descendFrom:)"
+	(aToken notNil and: [ aToken instancesAlongAncestry anySatisfy: [ :each |
+		each hasReservationAt: aSuspension waitingNode forToken: aToken ] ])
 		ifFalse: [ self flowInstance registerWaitingToken: aToken suspendedAt: aSuspension ]
 ]

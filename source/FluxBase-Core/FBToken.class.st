@@ -109,6 +109,26 @@ FBToken >> hasAncestor: aToken [
 	^ false
 ]
 
+{ #category : 'accessing' }
+FBToken >> instancesAlongAncestry [
+	"the flow instances my strand has run through, mine first, each once: my activation's,
+	then my parent's, and so on up the chain. Within one instance that is a single
+	element; a strand that entered a sub flow lists the child and then its callers,
+	because FBFlowInstance>>descendFrom: links the child's first token to the caller's.
+	Asked by FBBaseActivation>>waitForNode:withToken: to find a reservation that was
+	handed out upstream of the instance that is parking"
+
+	| instances each |
+	instances := OrderedCollection new.
+	each := self.
+	[ each notNil ] whileTrue: [
+		each activation ifNotNil: [ :anActivation |
+			(instances identityIncludes: anActivation flowInstance)
+				ifFalse: [ instances add: anActivation flowInstance ] ].
+		each := each parent ].
+	^ instances
+]
+
 { #category : 'as yet unclassified' }
 FBToken >> id [
 	^ id
