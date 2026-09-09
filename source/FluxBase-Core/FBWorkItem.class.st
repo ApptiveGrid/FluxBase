@@ -22,8 +22,7 @@ Class {
 	#superclass : 'Object',
 	#instVars : [
 		'transition',
-		'token',
-		'value'
+		'token'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -50,12 +49,3 @@ FBWorkItem >> transition: aFBTransition [
 	transition := aFBTransition
 ]
 
-{ #category : 'as yet unclassified' }
-FBWorkItem >> value [
-	^ value
-]
-
-{ #category : 'as yet unclassified' }
-FBWorkItem >> value: anObject [
-	value := anObject
-]

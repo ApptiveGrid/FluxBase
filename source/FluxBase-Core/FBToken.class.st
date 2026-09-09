@@ -49,7 +49,7 @@ statements - #created, #done, #error - stay on FBBaseActivation, and its #state
 answers #waiting off me.
 
 Not all of me is wired up. Only #splitId, #parent and #state currently drive
-decisions. #scope is not populated by anything yet, and #value and #metadata have no
+decisions. #scope is not populated by anything yet, and #metadata has no
 readers at all - the engine keeps the current value on the activation, not on me.
 "
 Class {
@@ -58,7 +58,6 @@ Class {
 	#instVars : [
 		'id',
 		'activation',
-		'value',
 		'scope',
 		'parent',
 		'splitId',
@@ -226,12 +225,3 @@ FBToken >> waiting [
 	state := #waiting
 ]
 
-{ #category : 'as yet unclassified' }
-FBToken >> value [
-	^ value
-]
-
-{ #category : 'as yet unclassified' }
-FBToken >> value: anObject [
-	value := anObject
-]

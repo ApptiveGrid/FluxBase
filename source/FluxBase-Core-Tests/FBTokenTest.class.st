@@ -12,13 +12,11 @@ FBTokenTest >> testAccessorsRoundTrip [
 	scope := FBScope new.
 	token := FBToken new.
 	token
-		value: 42;
 		scope: scope;
 		parent: parent;
 		splitId: 'split-1';
 		state: #waiting;
 		metadata: #(1 2 3).
-	self assert: token value equals: 42.
 	self assert: token scope equals: scope.
 	self assert: token parent equals: parent.
 	self assert: token splitId equals: 'split-1'.
