@@ -17,6 +17,6 @@ FBTestTaskWithBehavior >> defaultBehaviorClass [
 ]
 
 { #category : 'accessing' }
-FBTestTaskWithBehavior >> value [
+FBTestTaskWithBehavior >> producedValue [
 	^ 10 atRandom 
 ]

@@ -50,6 +50,9 @@ FBPluggableTask >> initialize [
 ]
 
 { #category : 'accessing' }
-FBPluggableTask >> value: anInteger [ 
-	block := [ :activation | activation value: anInteger  ]
+FBPluggableTask >> produces: anObject [
+	"configure me to hand out anObject as my result whenever I run - the constant sibling
+	of #evaluateTo:, which produces the value of a script instead. Used to be #value:,
+	which read as if it set a result; it sets what the task is to do"
+	block := [ :activation | activation value: anObject ]
 ]

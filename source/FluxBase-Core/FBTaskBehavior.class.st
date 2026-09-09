@@ -7,8 +7,10 @@ Class {
 }
 
 { #category : 'execution' }
-FBTaskBehavior >> execute [ 
-	activation value: self node value.
+FBTaskBehavior >> execute [
+	"the node's produced value becomes the activation's result - two different things
+	under two different names, see FBNode>>producedValue"
+	activation value: self node producedValue.
 	activation done.
 	activation followAllOutgoing.
 
