@@ -15,6 +15,32 @@ FBFlowInstanceTest >> testInnermostWaitingExecutorIsTheCurrentOneWhenItWaitsItse
 ]
 
 { #category : 'tests' }
+FBFlowInstanceTest >> testTheEndOfAnInstanceIsAnEventOnce [
+	"the end of an instance used to be nothing but a derived answer - #state saying #done
+	- that nobody observed. Now it is a moment: the last activation records an
+	FBFlowInstanceEnded, exactly once, as the last event. A waiting instance has not
+	ended and gets the event only once it was resumed and ran to its end"
+	| start wait flow instance endedEvents |
+	endedEvents := [ instance events select: [ :each | each isKindOf: FBFlowInstanceEnded ] ].
+	start := FBStartEvent new.
+	wait := start addOutgoingNode: (FBPluggableWait new condition: [ :each | false ]; yourself).
+	wait addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+
+	self assert: instance state equals: #waiting.
+	self assert: endedEvents value isEmpty.
+
+	instance resumeWaitingAt: wait with: 1.
+	instance execute.
+
+	self assert: instance state equals: #done.
+	self assert: endedEvents value size equals: 1.
+	self assert: (instance events last isKindOf: FBFlowInstanceEnded)
+]
+
+{ #category : 'tests' }
 FBFlowInstanceTest >> testInnermostWaitingExecutorIsNilWhenNothingWaits [
 	| flowInstance |
 	flowInstance := FBFlow simpleFlow newInstance.

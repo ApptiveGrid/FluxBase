@@ -49,6 +49,39 @@ FBParallelExecutorTest >> testScopeBodyIsQueuedWithTheForksOwnChildToken [
 ]
 
 { #category : 'as yet unclassified' }
+FBParallelExecutorTest >> testAFinishedParallelScopeLeavesNoJoinStates [
+	"the growth case: every iteration of a parallel scope passes through the split again
+	and is its own split execution, so the join states pile up one per iteration - the
+	node behind the join sees one, then two. They fall with the end of the instance
+	(FBFlowInstance>>ended), not with the iteration: an iteration's end is the scope's
+	business, and the scope is not built out that far yet"
+	| start fork split a b join after end flow instance seen |
+	seen := OrderedCollection new.
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	split := fork addOutgoingNode: (FBAndSplit named: 'split').
+	a := (FBPluggableTask named: 'a') block: [ :act | act value: act argument + 1 ].
+	b := (FBPluggableTask named: 'b') block: [ :act | act value: act argument * 10 ].
+	join := FBAndJoin named: 'join'.
+	after := (FBPluggableTask named: 'after') block: [ :act |
+		seen add: (act flowInstance instVarNamed: 'joinStates') size.
+		act value: act argument ].
+	split --> a --> join.
+	split --> b --> join.
+	join --> after.
+	end := (after addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+
+	self assert: instance state equals: #done.
+	self assert: seen asArray equals: #( 1 2 ).
+	self assert: (instance instVarNamed: 'joinStates') isNil.
+	self assert: (instance instVarNamed: 'splitBranchCounts') isNil
+]
+
+{ #category : 'as yet unclassified' }
 FBParallelExecutorTest >> testAndJoinInsideAParallelScopeReachesTheNodeBehindItOncePerIteration [
 	"the token a transition is queued with carries the branch identity a join needs
 	later (see FBToken). Inside a parallel scope it used to be dropped on queueing, so

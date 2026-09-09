@@ -132,50 +132,100 @@ FBAndJoinBehaviorTest >> testJoinReleasesOnlyOnceWhenAFurtherArrivalStillSatisfi
 	"Two branches of one split reach the join through the same predecessor 'a', so both
 	arrivals key onto the same #arrived entry and the second one still finds #expected
 	satisfied. Without the FBJoinState>>released latch the join fires for both and
-	everything behind it runs twice."
-	| start split a b join end flow instance splitId joinState |
+	everything behind it runs twice.
+
+	The join state is picked up by identity from behind the join while the instance
+	still runs - a finished instance holds none (FBFlowInstance>>ended)"
+	| start split a b join probe end flow instance joinState |
 	start := FBStartEvent new.
 	split := FBAndSplit named: 'split'.
 	a := FBTask named: 'a'.
 	b := FBTask named: 'b'.
 	join := FBAndJoin named: 'join'.
+	probe := (FBPluggableTask named: 'probe') block: [ :act |
+		joinState := act flowInstance joinStateFor: join splitId: act token splitId.
+		act value: act argument ].
 	end := FBEndEvent new.
 	start --> split.
 	split --> a --> join.
 	split --> b --> a.
-	join --> end.
+	join --> probe --> end.
 	flow := FBFlow new start: start.
 	instance := flow newInstance.
 	instance executeWith: 42.
 	"the join is entered twice - once per branch - but must release only once"
 	self assert: (instance activations select: [ :each | each node = join ]) size equals: 2.
 	self assert: (instance activations select: [ :each | each node = end ]) size equals: 1.
-	splitId := (instance executor activationOf: a) token splitId.
-	joinState := instance joinStateFor: join splitId: splitId.
 	self assert: joinState released
+]
+
+{ #category : 'as yet unclassified' }
+FBAndJoinBehaviorTest >> testAFinishedInstanceKeepsNoJoinState [
+	"a pass through a split leaves an FBJoinState and a branch count behind, and the
+	join cannot drop them itself - it cannot tell whether a further arrival may still
+	come, which is what the release latch is for. They fall at the end of the instance
+	instead, FBFlowInstance>>ended, once nothing runs and nothing can arrive. Measured on
+	both sides of the end: the node behind the join still sees the state, the finished
+	instance holds none"
+	| start split a b join after end flow instance seen |
+	seen := OrderedCollection new.
+	start := FBStartEvent new.
+	split := FBAndSplit named: 'split'.
+	a := FBTask named: 'a'.
+	b := FBTask named: 'b'.
+	join := FBAndJoin named: 'join'.
+	"the branch count is registered by hand here, the way FBMultiChoiceGatewayBehavior does
+	it for its split - an FBAndSplit registers none - so that the second kind of per-split
+	bookkeeping is measured as well"
+	after := (FBPluggableTask named: 'after') block: [ :act |
+		act flowInstance registerExpectedBranchCount: 2 forSplitId: act token splitId.
+		seen add: (act flowInstance instVarNamed: 'joinStates') size.
+		seen add: (act flowInstance instVarNamed: 'splitBranchCounts') size.
+		act value: act argument ].
+	end := FBEndEvent new.
+	start --> split.
+	split --> a --> join.
+	split --> b --> join.
+	join --> after --> end.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 42.
+
+	self assert: instance state equals: #done.
+	self assert: (instance activations select: [ :act | act node = end ]) size equals: 1.
+	"one split execution, one state and one count - there while the instance still ran"
+	self assert: seen asArray equals: #( 1 1 ).
+	"and gone with the end"
+	self assert: (instance instVarNamed: 'joinStates') isNil.
+	self assert: (instance instVarNamed: 'splitBranchCounts') isNil
 ]
 
 { #category : 'as yet unclassified' }
 FBAndJoinBehaviorTest >> testArrivalsThroughTheSamePredecessorAreCountedSeparately [
 	"Two branches of one split reach the join through the same predecessor 'a' - one
 	directly, the other after passing 'b'. Keyed by source node both would collapse
-	onto one #arrived entry; keyed by the token they came through they stay countable."
-	| start split a b join end flow instance splitId joinState |
+	onto one #arrived entry; keyed by the token they came through they stay countable.
+
+	The join state is picked up by identity from behind the join while the instance
+	still runs - a finished instance holds none (FBFlowInstance>>ended). The second
+	arrival still lands on that same object, so it is counted here after the run"
+	| start split a b join probe end flow instance joinState |
 	start := FBStartEvent new.
 	split := FBAndSplit named: 'split'.
 	a := FBTask named: 'a'.
 	b := FBTask named: 'b'.
 	join := FBAndJoin named: 'join'.
+	probe := (FBPluggableTask named: 'probe') block: [ :act |
+		joinState := act flowInstance joinStateFor: join splitId: act token splitId.
+		act value: act argument ].
 	end := FBEndEvent new.
 	start --> split.
 	split --> a --> join.
 	split --> b --> a.
-	join --> end.
+	join --> probe --> end.
 	flow := FBFlow new start: start.
 	instance := flow newInstance.
 	instance executeWith: 42.
-	splitId := (instance executor activationOf: a) token splitId.
-	joinState := instance joinStateFor: join splitId: splitId.
 	self assert: joinState arrived size equals: 2
 ]
 
