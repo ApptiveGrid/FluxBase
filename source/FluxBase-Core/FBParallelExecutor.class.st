@@ -57,10 +57,11 @@ FBParallelExecutor >> buildImpliedContinuationNode [
 { #category : 'services' }
 FBParallelExecutor >> continue [
     self closeFinishedIterations.
-    self isInCancelledScope ifTrue: [
-        "the scope my loop runs in was cancelled: no further iteration starts, and what
-        was queued for the current one falls. Nothing follows the fork either - the
-        scope join never runs, and a token of a cancelled scope queues nothing"
+    (self isInCancelledScope or: [ self isStrandCancelled ]) ifTrue: [
+        "the scope my loop runs in was cancelled, or the fork's own strand was: no
+        further iteration starts, and what was queued for the current one falls. Nothing
+        follows the fork either - #completeScope goes on behind the join only for a
+        living strand, and a token of a cancelled scope queues nothing"
         pending removeAll: pending copy.
         index := list size ].
     (pending isEmpty and: [ index < list size ]) ifTrue: [
@@ -100,11 +101,45 @@ FBParallelExecutor >> completeScope [
 	join := self scopeJoinActivation.
 	self popThenResume: [
 		fork done.
-		join ifNotNil: [
+		(join notNil and: [ self isStrandCancelled not ]) ifTrue: [
 			join values: join arguments.
 			join token: fork childToken.
 			join done.
 			join followAllOutgoing ] ]
+]
+
+{ #category : 'cancelling' }
+FBParallelExecutor >> cancelRemainingIterations [
+	"Cancel Multiple Instance Activity (WCP-26): every iteration still running or
+	waiting is cancelled and no further one starts; then the scope completes with what
+	arrived - nil in the slots of the iterations taken back - and the flow goes on
+	behind the loop (#completeScope, reached through the settling that follows each
+	withdrawal). The fork's own strand stays and carries the result on; a cancelled fork
+	strand is the other thing (FBFlowInstance>>cancelStrand: on the fork's token): it
+	takes the loop with it and nothing goes on behind.
+
+	Every iteration still open has its scope (#openIterationScopes), and cancelling the
+	scope takes its strands, its waits and its addresses, sub flow frames included
+	(FBFlowInstance>>cancelScope:). The seed of an iteration queued but not yet stepped
+	carries no token and lies in no scope yet; it falls here. Answers the tokens taken"
+
+	| taken |
+	index := list size.
+	pending removeAll: pending copy.
+	taken := OrderedCollection new.
+	(openIterationScopes ifNil: [ #() ]) copy do: [ :each |
+		taken addAll: (flowInstance cancelScope: each) ].
+	"with nothing open there was no withdrawal to settle after - the scope has to
+	complete all the same"
+	taken ifEmpty: [ self settleAfterWithdrawal ].
+	^ taken
+]
+
+{ #category : 'testing' }
+FBParallelExecutor >> isStrandCancelled [
+	"was the fork's own strand taken back (FBFlowInstance>>cancelStrand:)? Then the loop
+	is over without a continuation: no further iteration, nothing behind the join"
+	^ (self activationOf: node) token isCancelled
 ]
 
 { #category : 'services' }

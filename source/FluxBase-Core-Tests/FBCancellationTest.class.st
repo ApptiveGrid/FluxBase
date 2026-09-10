@@ -836,3 +836,147 @@ FBCancellationTest >> testALoopInACancelledCaseDoesNotGoOnBehindItsJoin [
 	self assert: seen isEmpty.
 	self assertConsistent: instance
 ]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingTheRemainingIterationsCompletesTheLoopWithWhatArrived [
+	"Cancel Multiple Instance Activity: one iteration has arrived, the other still
+	waits. Cancelling the remaining iterations takes the wait, and the loop completes
+	with the first iteration's value and a nil slot - the flow goes on behind it"
+	| seen instance entries fork taken |
+	seen := OrderedCollection new.
+	instance := self loopWaitingTwiceInto: seen.
+	fork := instance flow nodes detect: [ :each | each name = 'fork' ].
+	entries := instance openWaitingEntries copy.
+	self assert: (instance signal: entries first correlationId with: 1).
+	instance execute.
+	self assert: instance state equals: #waiting.
+	self assertConsistent: instance.
+
+	taken := instance cancelIterationsOf: fork.
+
+	self assert: taken asArray equals: { entries second token }.
+	self assert: instance openWaitingEntries isEmpty.
+	self assert: instance state equals: #running.
+	self assertConsistent: instance.
+	instance execute.
+	self assert: instance state equals: #done.
+	self assert: seen asArray equals: { #( 1 nil ) }.
+	self assert: (instance events count: [ :each | each isKindOf: FBScopeCancelled ]) equals: 1.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingTheIterationsOfANodeThatIsNotLoopingIsSilent [
+	"before the loop opened and after it closed there is nothing to cancel: empty
+	answer, no event, the instance untouched"
+	| seen instance fork before |
+	seen := OrderedCollection new.
+	instance := (self loopWaitingTwiceInto: seen) flow newInstance.
+	fork := instance flow nodes detect: [ :each | each name = 'fork' ].
+	self assert: (instance cancelIterationsOf: fork) isEmpty.
+	self assert: instance state equals: #created.
+
+	instance executeWith: #( 10 20 ).
+	instance openWaitingEntries copy do: [ :each | instance signal: each correlationId with: 0 ].
+	instance execute.
+	self assert: instance state equals: #done.
+	before := instance events size.
+	self assert: (instance cancelIterationsOf: fork) isEmpty.
+	self assert: instance events size equals: before.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingTheRemainingIterationsInsideASplitBranchLetsTheJoinGoOn [
+	"the loop runs in one branch of an AND-split, its sibling has arrived at the join.
+	Cancelling the loop's iterations completes the loop, its branch arrives with the
+	loop's result, and the join releases with both"
+	| start split fork wait b join after flow instance |
+	start := FBStartEvent new.
+	split := start addOutgoingNode: (FBAndSplit named: 'split').
+	"the sibling first, and the loop one node later: the sibling has to arrive at the
+	join before the loop's frame takes the top - the root queue is stepped in order"
+	b := split addOutgoingNode: ((FBPluggableTask named: 'b') block: [ :act | act value: 3 ]).
+	join := FBAndJoin named: 'join'.
+	b --> join.
+	fork := (split addOutgoingNode: ((FBPluggableTask named: 'pre') block: [ :act | act value: act argument ]))
+		addOutgoingNode: (FBParallelNode named: 'fork').
+	wait := fork addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	(wait addOutgoingNode: (FBParallelJoinNode named: 'scope join')) --> join.
+	after := join addOutgoingNode: ((FBPluggableTask named: 'after') block: [ :act | act value: act argument ]).
+	after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+	self assert: instance state equals: #waiting.
+	self assert: (instance activations count: [ :each | each node == join ]) equals: 1.
+	self assertConsistent: instance.
+
+	instance cancelIterationsOf: fork.
+
+	self assertConsistent: instance.
+	instance execute.
+	self assert: instance state equals: #done.
+	self assert: (instance activations count: [ :each | each node == after ]) equals: 1.
+	self assert: (instance activationOfNode: after) argument keys asSet equals: { b. wait outgoing first target } asSet.
+	self assert: ((instance activationOfNode: after) argument at: wait outgoing first target) equals: #( nil nil ).
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingTheForksStrandTakesTheLoopAndNothingRunsBehindIt [
+	"Cancel Activity on the loop itself: the fork's strand and everything descending
+	from it fall, no further iteration starts, and nothing goes on behind the scope
+	join - the strand is gone. Used to take the iterations and then start the next one"
+	| seen instance fork forkToken |
+	seen := OrderedCollection new.
+	instance := self loopWaitingTwiceInto: seen.
+	fork := instance flow nodes detect: [ :each | each name = 'fork' ].
+	forkToken := (instance activationOfNode: fork) token.
+	self assert: instance openWaitingEntries size equals: 2.
+	self assertConsistent: instance.
+
+	instance cancelStrand: forkToken.
+
+	self assert: forkToken isCancelled.
+	self assert: instance openWaitingEntries isEmpty.
+	self assert: instance isRootExecutor.
+	self assert: instance state equals: #done.
+	self assert: instance hasEnded.
+	self assert: seen isEmpty.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingTheRemainingIterationsTakesAWaitingSubFlowWithThem [
+	"an iteration calls a sub flow that waits, so its frame is on top and the loop
+	cannot even start the next iteration. Cancelling the iterations takes the child's
+	wait, the frame pops, and the loop completes with nothing"
+	| start fork subNode after flow instance seen |
+	seen := OrderedCollection new.
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	subNode := fork addOutgoingNode: FBSubFlowNode new.
+	subNode subFlow: self flowWaitingFromOutside.
+	after := (subNode addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: ((FBPluggableTask named: 'after') block: [ :act |
+			seen add: act argument.
+			act value: act argument ]).
+	after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+	self assert: instance state equals: #waiting.
+	self assert: (instance executor isKindOf: FBSubFlowExecutor).
+	self assert: instance openWaitingEntries size equals: 1.
+	self assertConsistent: instance.
+
+	instance cancelIterationsOf: fork.
+
+	self assert: instance openWaitingEntries isEmpty.
+	self assertConsistent: instance.
+	instance execute.
+	self assert: instance state equals: #done.
+	self assert: seen asArray equals: { #( nil nil ) }.
+	self assertConsistent: instance
+]

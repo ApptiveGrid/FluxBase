@@ -966,13 +966,25 @@ FBFlowInstance >> cancelStrand: aToken [
 	Answers the tokens taken - empty, and without a trace, when nothing of the strand
 	was left: cancelling twice is cancelling once.
 
-	This is Cancel Activity (WCP-19), and the selection an abbrechender Join makes over
-	its siblings. Joins do not yet know about cancelled branches - a join a cancelled
-	branch was heading to keeps waiting for it; that is the next slice"
+	aToken itself may stand on no queue at all: the token of an activation that is still
+	running - a parallel node whose loop is open, a sub flow node whose child runs.
+	That activation is part of the strand and reads #cancelled from now on; its token is
+	marked before the withdrawal, since the settling after it asks (a loop whose fork's
+	strand fell starts nothing more and goes on with nothing,
+	FBParallelExecutor>>isStrandCancelled). An activation already done is history, its
+	token stays as it is - the strand from there on is what falls.
 
-	| taken |
+	This is Cancel Activity (WCP-19), and the selection an abbrechender Join makes over
+	its siblings. A join a cancelled branch was heading to knows (FBJoinState>>canRelease)"
+
+	| taken standing |
+	standing := aToken isCancelled not and: [
+		aToken activation notNil and: [ aToken activation isDone not ] ].
+	standing ifTrue: [ aToken cancelled ].
 	taken := self withdrawStrandsSatisfying: [ :each | each == aToken or: [ each hasAncestor: aToken ] ].
-	taken ifEmpty: [ ^ taken ].
+	(standing and: [ (taken includes: aToken) not ]) ifTrue: [
+		self addEvent: (FBNodeActivationCancelled new activation: aToken activation) ].
+	(taken isEmpty and: [ standing not ]) ifTrue: [ ^ taken ].
 	self addEvent: (FBStrandCancelled new token: aToken).
 	self endIfOver.
 	^ taken
@@ -1000,6 +1012,18 @@ FBFlowInstance >> cancelScope: aScope [
 		ifFalse: [ [ :each | aScope encloses: each scope ] ]).
 	aScope == scope ifFalse: [ self endIfOver ].
 	^ taken
+]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> cancelIterationsOf: aParallelNode [
+	"Cancel Multiple Instance Activity (WCP-26) on aParallelNode's running loop: the
+	iterations still running or waiting are cancelled, no further one starts, and the
+	loop completes with what arrived - the flow goes on behind it
+	(FBParallelExecutor>>cancelRemainingIterations). Answers the tokens taken. A node
+	that is not looping right now - before its first iteration or after its last, or
+	looping in a sub flow of mine rather than in me - answers empty and leaves no trace"
+	executor ifNil: [ ^ #() ].
+	^ (self parallelExecutorFrom: aParallelNode ifAbsent: [ ^ #() ]) cancelRemainingIterations
 ]
 
 { #category : 'cancelling' }
