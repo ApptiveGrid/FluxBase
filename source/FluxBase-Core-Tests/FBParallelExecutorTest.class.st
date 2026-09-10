@@ -392,3 +392,63 @@ FBParallelExecutorTest >> testTheScopeJoinIsFoundPastAnInnerLoop [
 	self assert: instance state equals: #done.
 	self assert: seen asArray equals: { { #( 2 4 ). nil } }
 ]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testEveryIterationRecordsTheTransitionItFollows [
+	"a transition followed inside a parallel scope is recorded like one followed by the
+	root executor - once per iteration that follows it, not for an iteration its
+	condition holds back. The scope's log used to have no transitions at all"
+	| seen instance body followed |
+	seen := OrderedCollection new.
+	instance := self loopOver: #( 1 2 3 ) bodyWhen: [ :x | x < 3 ] into: seen.
+	body := instance flow nodes detect: [ :each | each name = 'body' ].
+	followed := instance events select: [ :each |
+		(each isKindOf: FBTransitionFollowed) and: [ each transition target == body ] ].
+	self assert: followed size equals: 2.
+	self assert: (followed collect: [ :each | each value ]) asArray equals: #( 1 2 ).
+	self assert: instance state equals: #done
+]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testTheInstanceIsAskedBeforeEachIterationsTransition [
+	"FBFlowInstance>>aboutToTransition: is asked once per iteration that follows the
+	body's transition - what ApptiveBase counts its rate limits with, and what a loop
+	used to bypass"
+	| start fork body instance flow |
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	body := (FBPluggableTask named: 'body') block: [ :act | act value: act argument ].
+	fork --> (body when: [ :x | x < 3 ]).
+	(body addOutgoingNode: (FBParallelJoinNode named: 'scope join')) addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := FBProbingFlowInstance new flow: flow.
+	instance executeWith: #( 1 2 3 ).
+	self assert: instance state equals: #done.
+	self assert: (instance asked count: [ :each | each target == body ]) equals: 2
+]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testARefusedTransitionLeavesTheIterationsWorkQueued [
+	"the hook refuses the second iteration's transition: the error comes out of the
+	step, the work item stays queued as it does in the root executor, and nothing of
+	that iteration ran"
+	| start fork body instance flow ran |
+	ran := OrderedCollection new.
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	body := (FBPluggableTask named: 'body') block: [ :act | ran add: act argument. act value: act argument ].
+	fork --> body.
+	(body addOutgoingNode: (FBParallelJoinNode named: 'scope join')) addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := FBProbingFlowInstance new flow: flow.
+	instance refuseWith: [ :transition |
+		(transition target == body and: [ instance executor currentIteration = 2 ])
+			ifTrue: [ Error signal: 'refused' ] ].
+	instance initialValue: #( 1 2 3 ).
+	self should: [ instance execute ] raise: Error.
+	self assert: ran asArray equals: #( 1 ).
+	self assert: instance executor pending size equals: 1.
+	self assert: instance executor pending first transition target identicalTo: body.
+	self deny: (instance events anySatisfy: [ :each |
+		(each isKindOf: FBTransitionFollowed) and: [ each transition target == body and: [ each value = 2 ] ] ])
+]
