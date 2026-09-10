@@ -748,3 +748,91 @@ FBCancellationTest >> testAJoinReleasedFromAWithdrawalQueuesOnItsOwnExecutorNotO
 	self assert: (instance activations select: [ :each | each node == outerJoin ]) size equals: 2.
 	self assertConsistent: instance
 ]
+
+{ #category : 'helpers' }
+FBCancellationTest >> loopWaitingTwiceInto: aCollector [
+	"start -> fork -> wait (external) -> scope join -> after -> end over #( 10 20 );
+	after's argument is collected"
+	| start fork wait after flow instance |
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	wait := fork addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	after := (wait addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: ((FBPluggableTask named: 'after') block: [ :act |
+			aCollector add: act argument.
+			act value: act argument ]).
+	after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+	^ instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingTheLastWaitingIterationCompletesTheLoop [
+	"the first iteration was resumed and passed the scope join; the second, still
+	waiting, is taken back. The loop is over, and the node behind the scope join runs
+	with the first iteration's value and a nil slot for the second - it used to be left
+	unrun, with the instance reading #done"
+	| seen instance entries |
+	seen := OrderedCollection new.
+	instance := self loopWaitingTwiceInto: seen.
+	entries := instance openWaitingEntries copy.
+	self assert: (instance signal: entries first correlationId with: 1).
+	instance execute.
+	self assert: instance state equals: #waiting.
+	self assert: seen isEmpty.
+	self assertConsistent: instance.
+
+	instance cancelStrand: entries second token.
+
+	self assert: instance state equals: #running.
+	self assertConsistent: instance.
+	instance execute.
+	self assert: instance state equals: #done.
+	self assert: seen asArray equals: { #( 1 nil ) }.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingEveryIterationCompletesTheLoopWithNothing [
+	"both iterations are taken back before either arrived: the loop completes with an
+	empty result and the flow goes on behind it - a loop is one activity of the flow,
+	unlike an AND-join, which releases nothing when nothing arrived"
+	| seen instance |
+	seen := OrderedCollection new.
+	instance := self loopWaitingTwiceInto: seen.
+	self assert: instance openWaitingEntries size equals: 2.
+
+	instance cancelStrand: instance openWaitingEntries first token.
+	self assert: instance state equals: #waiting.
+	self assert: seen isEmpty.
+	self assertConsistent: instance.
+	instance cancelStrand: instance openWaitingEntries first token.
+
+	self assert: instance state equals: #running.
+	self assertConsistent: instance.
+	instance execute.
+	self assert: instance state equals: #done.
+	self assert: seen asArray equals: { #( nil nil ) }.
+	self assert: (self cancelledEventsOf: instance) size equals: 2.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testALoopInACancelledCaseDoesNotGoOnBehindItsJoin [
+	"Cancel Case while the loop waits: the loop's own scope fell with the root scope,
+	so completing it queues nothing - nothing runs behind the scope join, and the
+	instance reads #cancelled"
+	| seen instance |
+	seen := OrderedCollection new.
+	instance := self loopWaitingTwiceInto: seen.
+	self assert: instance state equals: #waiting.
+
+	instance cancel.
+
+	self assert: instance state equals: #cancelled.
+	self assert: instance hasEnded.
+	self assert: seen isEmpty.
+	self assertConsistent: instance
+]

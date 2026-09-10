@@ -291,3 +291,104 @@ FBParallelExecutorTest >> testTheLoopVariableFollowsTheIterationBeingStepped [
 	self assert: instance state equals: #done.
 	self assert: seen asArray equals: { 20 -> 'B'. 10 -> 'A' }
 ]
+
+{ #category : 'helpers' }
+FBParallelExecutorTest >> loopOver: aCollection bodyWhen: aBlock into: aCollector [
+	"start -> fork -> body (x2, when aBlock) -> scope join -> after -> end; after's
+	argument is collected"
+	| start fork body after flow instance |
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	body := (FBPluggableTask named: 'body') block: [ :act | act value: act argument * 2 ].
+	fork --> (body when: aBlock).
+	after := (body addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: ((FBPluggableTask named: 'after') block: [ :act |
+			aCollector add: act argument.
+			act value: act argument ]).
+	after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: aCollection.
+	^ instance
+]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testALastIterationFilteredByAConditionStillCompletesTheLoop [
+	"the last iteration's body is filtered by the condition on the fork's outgoing: the
+	loop is over all the same and the node behind the scope join runs, with a nil slot
+	for the iteration that had no body. It used to run only when the last iteration
+	itself passed the scope join - a filtered last iteration ended the flow silently"
+	| seen instance |
+	seen := OrderedCollection new.
+	instance := self loopOver: #( 1 2 3 ) bodyWhen: [ :x | x < 3 ] into: seen.
+	self assert: instance state equals: #done.
+	self assert: seen asArray equals: { #( 2 4 nil ) }
+]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testALoopWhoseIterationsAreAllFilteredCompletesWithNothing [
+	"no iteration ran a body: the loop completes with an empty result and the flow goes
+	on behind it - the loop is one activity, not a join of independent strands"
+	| seen instance |
+	seen := OrderedCollection new.
+	instance := self loopOver: #( 1 2 3 ) bodyWhen: [ :x | false ] into: seen.
+	self assert: instance state equals: #done.
+	self assert: seen asArray equals: { #( nil nil nil ) }
+]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testAnEmptyInputCompletesTheLoopAtOnce [
+	"nothing to iterate: the scope completes with an empty result and the flow goes on
+	behind the loop. It used to end there, silently, with the fork left #created"
+	| seen instance fork |
+	seen := OrderedCollection new.
+	instance := self loopOver: #( ) bodyWhen: [ :x | true ] into: seen.
+	fork := instance flow nodes detect: [ :each | each name = 'fork' ].
+	self assert: instance state equals: #done.
+	self assert: seen asArray equals: { #( ) }.
+	self assert: (instance activationOfNode: fork) state equals: #done.
+	self assert: instance isRootExecutor
+]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testTokensBehindTheScopeJoinBelongToTheForksStrand [
+	"behind the loop the strand is the fork's again: the token of the node after the
+	scope join lives in the fork's scope and descends from the fork's token - not from
+	the last iteration's, whose scope is over"
+	| seen instance fork after forkToken afterToken |
+	seen := OrderedCollection new.
+	instance := self loopOver: #( 1 2 ) bodyWhen: [ :x | true ] into: seen.
+	fork := instance flow nodes detect: [ :each | each name = 'fork' ].
+	after := instance flow nodes detect: [ :each | each name = 'after' ].
+	forkToken := (instance activationOfNode: fork) token.
+	afterToken := (instance activationOfNode: after) token.
+	self assert: afterToken scope identicalTo: forkToken scope.
+	self assert: (afterToken hasAncestor: forkToken).
+	self assert: (afterToken scope iterationOwnedBy: fork) isNil
+]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testTheScopeJoinIsFoundPastAnInnerLoop [
+	"the outer loop's last iteration is filtered, so the outer scope completes without an
+	arrival and has to find its own join by itself - past the inner loop's join, which
+	closes the inner scope only. The first outer iteration ran the inner loop and arrived
+	with its result, the second left a nil slot"
+	| start outer inner body seen after flow instance |
+	seen := OrderedCollection new.
+	start := FBStartEvent new.
+	outer := start addOutgoingNode: (FBParallelNode named: 'outer').
+	inner := FBParallelNode named: 'inner'.
+	outer --> (inner when: [ :x | x size > 1 ]).
+	body := inner addOutgoingNode: ((FBPluggableTask named: 'body') block: [ :act | act value: act argument * 2 ]).
+	after := ((body addOutgoingNode: (FBParallelJoinNode named: 'inner join'))
+		addOutgoingNode: (FBParallelJoinNode named: 'outer join'))
+		addOutgoingNode: ((FBPluggableTask named: 'after') block: [ :act |
+			seen add: act argument.
+			act value: act argument ]).
+	after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( #( 1 2 ) #( 3 ) ).
+	self assert: instance state equals: #done.
+	self assert: seen asArray equals: { { #( 2 4 ). nil } }
+]

@@ -8,20 +8,12 @@ Class {
 
 { #category : 'execution' }
 FBParallelJoinNodeBehavior >> execute [
-	"neither the fork's own activation nor this join's own activation ever reached #done:
-	FBParallelExecutor>>continue's own '(self activationOf: node) done. self stop' tail is
-	only reached when nothing ever pops this executor first - but a join always pops it
-	directly via #popThenResume: once #atEnd, bypassing that tail entirely. Mirror
-	FBTaskBehavior>>execute's value/done/followAllOutgoing order for both activations here
-	instead - #done is itself a no-op (see FBParallelActivation>>done) until the executor is
-	truly at its last index, so this is safe to call unconditionally, exactly like a plain
-	task's activation already does on every iteration."
+	"one arrival per iteration: my argument slot already holds this iteration's value
+	(FBParallelActivation>>argument:, slotted by token). The scope closes once every
+	iteration is accounted for - here, when this arrival was the last thing outstanding;
+	from the executor itself when a withdrawal or a filtered iteration was
+	(FBParallelExecutor>>completeScope, the one way the scope closes)"
 	| executor |
 	executor := activation flowInstance executor.
-	executor atEnd ifTrue: [
-		executor popThenResume: [
-			(executor activationOf: executor node) done.
-			activation values: activation arguments.
-			activation done.
-			activation followAllOutgoing ] ]
+	executor atEnd ifTrue: [ executor completeScope ]
 ]
