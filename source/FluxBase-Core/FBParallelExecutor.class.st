@@ -68,8 +68,86 @@ FBParallelExecutor >> continue [
         self queueScopeBody ].
     pending isEmpty ifFalse: [ ^ self ].
     suspended isEmpty ifFalse: [ ^ self ].
-    (self activationOf: node) done.
-    self stop
+    self completeScope
+]
+
+{ #category : 'services' }
+FBParallelExecutor >> completeScope [
+	"the loop is over - every iteration accounted for: arrived at the scope join,
+	filtered by a condition, or taken back (#atEnd) - and closes the way its scope join
+	closes it, whoever accounted for the last iteration: the join's own step
+	(FBParallelJoinNodeBehavior), a withdrawal (#settleAfterWithdrawal), a filtered last
+	iteration or an empty input (#continue). Before, only the join's own step closed the
+	scope; the other endings popped me and left the flow behind the loop unrun, while
+	the instance read #done.
+
+	I am popped, the fork is done, and the scope join's activation carries one value per
+	iteration - nil where none arrived - and goes on behind the join on a token of the
+	fork's strand: behind the loop the strand is the fork's again, in the fork's scope,
+	not in the last iteration's. The loop completes with nothing as well - an empty
+	input, every iteration filtered, every iteration taken back: the flow behind it goes
+	on with an empty result, since the loop is one activity of the flow and not a join of
+	independent strands (Norbert, 2026-09-10; an AND-join with nothing arrived releases
+	nothing, see FBJoinState>>canRelease). A loop whose own scope was cancelled queues
+	nothing here (FBBaseExecutor>>addPending:withToken:).
+
+	A body that ends the strand instead - every path through it reaching an end event -
+	has no join to go on from (#scopeJoinNode answers nil): the scope closes and that is
+	the end of the fork's strand, as it is when every branch of a split ends"
+
+	| fork join |
+	fork := self activationOf: node.
+	join := self scopeJoinActivation.
+	self popThenResume: [
+		fork done.
+		join ifNotNil: [
+			join values: join arguments.
+			join token: fork childToken.
+			join done.
+			join followAllOutgoing ] ]
+]
+
+{ #category : 'services' }
+FBParallelExecutor >> scopeJoinActivation [
+	"the activation of my scope join - the one the iterations arrived at, or a fresh one
+	when none did (#completeScope with nothing arrived); nil for a body without a join
+	to go on from"
+	| join |
+	join := self scopeJoinNode ifNil: [ ^ nil ].
+	^ self activations reverse
+		detect: [ :each | each node == join and: [ each executor == self ] ]
+		ifNone: [ self activations add: (self newActivation node: join; yourself) ]
+]
+
+{ #category : 'services' }
+FBParallelExecutor >> scopeJoinNode [
+	"the node that closes my scope: the FBParallelJoinNode of my fork - the first one
+	reachable from the body at my own nesting level, an inner loop's join being passed
+	with that loop - or, when the body closes the scope implicitly, the join synthesized
+	for it (#impliedContinuationNode, see FBNode>>effectiveOutgoingFor:) - or nil, when
+	every path through the body ends the strand at a flow terminal (an end event inside
+	the loop) and there is nothing behind the loop to go on to. Asked when the scope
+	completes without an arrival, which is the one moment no iteration has led the way"
+	| seen frontier openLeaf |
+	openLeaf := false.
+	seen := IdentitySet new.
+	frontier := OrderedCollection new.
+	node outgoing do: [ :each | frontier add: each target -> 0 ].
+	[ frontier isEmpty ] whileFalse: [
+		| pair candidate depth |
+		pair := frontier removeFirst.
+		candidate := pair key.
+		depth := pair value.
+		(seen includes: candidate) ifFalse: [
+			seen add: candidate.
+			(candidate isKindOf: FBParallelJoinNode) ifTrue: [
+				depth = 0 ifTrue: [ ^ candidate ].
+				depth := depth - 1 ].
+			(candidate isKindOf: FBParallelNode) ifTrue: [ depth := depth + 1 ].
+			candidate outgoing
+				ifEmpty: [ candidate isFlowTerminal ifFalse: [ openLeaf := true ] ]
+				ifNotEmpty: [ :outgoing | outgoing do: [ :each | frontier add: each target -> depth ] ] ] ].
+	^ openLeaf ifTrue: [ self impliedContinuationNode ] ifFalse: [ nil ]
 ]
 
 { #category : 'execution' }
@@ -162,9 +240,15 @@ FBParallelExecutor >> lastValueOf: aFBNode [
 ]
 
 { #category : 'accessing' }
-FBParallelExecutor >> list: aCollection [ 
+FBParallelExecutor >> list: aCollection [
+	"the input I iterate. An empty one has no iteration: the seed #node: queued falls
+	out of #pending again, and the cursor stands at 0 so that #atEnd holds - the fork's
+	behavior sends #continue right after pushing me, and the scope completes at once
+	with an empty result (#completeScope)"
 	list := aCollection.
-
+	aCollection isEmpty ifTrue: [
+		pending removeAll: pending copy.
+		index := 0 ]
 ]
 
 { #category : 'instance creation' }
