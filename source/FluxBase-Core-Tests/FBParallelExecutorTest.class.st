@@ -211,3 +211,83 @@ FBParallelExecutorTest >> testEachIterationRunsInItsOwnScope [
 	self assert: (instance activations detect: [ :each | each node == fork ]) token scope
 		identicalTo: instance scope
 ]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testAnIterationScopeKnowsItsIndex [
+	| start fork body flow instance scopes |
+	scopes := OrderedCollection new.
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	body := (FBPluggableTask named: 'body') block: [ :act |
+		scopes add: act token scope.
+		act value: act argument ].
+	fork --> body.
+	(body addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 30 ).
+	self assert: (scopes collect: [ :each | each index ]) asArray equals: #( 1 2 3 ).
+	self assert: (scopes collect: [ :each | each iterationOwnedBy: fork ]) asArray equals: scopes asArray.
+	self assert: (instance scope iterationOwnedBy: fork) isNil
+]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testALateResumedIterationWritesIntoItsOwnSlot [
+	"two iterations wait; the second is resumed first, then the first. Each value has to
+	land in the slot of its own iteration. The slot used to be the executor's cursor,
+	which had moved on to the second iteration by the time the first went on - the
+	first iteration's value overwrote the second's, and the node behind the scope join
+	saw #(nil 'A')"
+	| start fork wait after flow instance entries |
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	wait := fork addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	after := (wait addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: ((FBPluggableTask named: 'after') block: [ :act | act value: act argument ]).
+	after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+	entries := instance openWaitingEntries copy.
+	self assert: entries size equals: 2.
+
+	self assert: (instance signal: entries second correlationId with: 'B').
+	instance execute.
+	self assert: instance state equals: #waiting.
+	self assert: (instance signal: entries first correlationId with: 'A').
+	instance execute.
+
+	self assert: instance state equals: #done.
+	self assert: (instance activationOfNode: after) argument equals: #( 'A' 'B' )
+]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testTheLoopVariableFollowsTheIterationBeingStepped [
+	"the fork's #output is the loop variable scripts read. While the first iteration,
+	resumed late, runs its next node, it has to read the first element - not the one
+	the cursor stands on, which is the second iteration's by then. Same for a
+	predecessor's value: the probe's argument is its own iteration's wait result"
+	| start fork wait probe seen flow instance entries |
+	seen := OrderedCollection new.
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	wait := fork addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	probe := wait addOutgoingNode: ((FBPluggableTask named: 'probe') block: [ :act |
+		seen add: (act instance activationOfNode: fork) output -> act argument.
+		act value: act argument ]).
+	(probe addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+	entries := instance openWaitingEntries copy.
+
+	self assert: (instance signal: entries second correlationId with: 'B').
+	instance execute.
+	self assert: (instance signal: entries first correlationId with: 'A').
+	instance execute.
+
+	self assert: instance state equals: #done.
+	self assert: seen asArray equals: { 20 -> 'B'. 10 -> 'A' }
+]

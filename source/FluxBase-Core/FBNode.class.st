@@ -418,8 +418,11 @@ FBNode >> resultTransition: aSymbol [
 { #category : 'executing' }
 FBNode >> resumeIn: anExecutor withToken: aToken value: aValue [
 	"I was activated and then parked inside my own execution - a condition that did not
-	hold (FBWaitForConditionBehavior). My activation is still standing and still carries
-	its own token, so aToken has nothing to restore here. The impulse is my result rather
+	hold (FBWaitForConditionBehavior). My activation is still standing; aToken is the
+	token it parked with, and it is put back on it: inside a parallel scope one
+	activation serves every iteration of a node, and a later iteration may have run it
+	since and left its own token there - the slot the resumed value goes into is read
+	off the token (FBParallelActivation>>iterationIndex). The impulse is my result rather
 	than my input: it becomes my activation's #value and my outgoing transitions are
 	followed, the way the wait would have gone on had the condition held.
 
@@ -435,6 +438,7 @@ FBNode >> resumeIn: anExecutor withToken: aToken value: aValue [
 
 	| activation |
 	activation := anExecutor activationOf: self.
+	aToken ifNotNil: [ activation token: aToken ].
 	activation resumed.
 	activation value: aValue.
 	activation done.
