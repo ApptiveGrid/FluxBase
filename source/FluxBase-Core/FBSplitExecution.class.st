@@ -21,6 +21,13 @@ I answer what the join needs to know and what the tokens alone cannot say:
 	scope		the FBScope the pass runs in - what the FBJoinState made for me
 			falls with (FBFlowInstance>>scopeEnded:)
 	id		my identity for the outside: FBToken>>splitId and the event log
+	cancelledBranches
+			how many of my branches were taken back and will never arrive
+			(FBFlowInstance>>accountCancelledBranchesOf:). The join counts them
+			as accounted for and goes on with what did arrive
+			(FBJoinState>>canRelease); once every branch is gone and none
+			arrived, the branch that led into me is gone for #outer too
+			(FBFlowInstance>>settlePass:)
 
 A split opens no scope: a scope answers 'what falls together', I answer 'who is expected
 at the join' (see FBScope). FBFlowInstance keys each join's FBJoinState by me, so a
@@ -35,7 +42,8 @@ Class {
 		'node',
 		'outer',
 		'branchCount',
-		'scope'
+		'scope',
+		'cancelledBranches'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -64,6 +72,18 @@ FBSplitExecution >> branchCount: anInteger [
 	branchCount := anInteger
 ]
 
+{ #category : 'cancelling' }
+FBSplitExecution >> branchCancelled [
+	"one of my branches was taken back - its front token fell, see
+	FBToken>>isFrontOfItsPass - and will never arrive at the join"
+	cancelledBranches := cancelledBranches + 1
+]
+
+{ #category : 'accessing' }
+FBSplitExecution >> cancelledBranches [
+	^ cancelledBranches
+]
+
 { #category : 'accessing' }
 FBSplitExecution >> id [
 	^ id
@@ -72,7 +92,14 @@ FBSplitExecution >> id [
 { #category : 'initialization' }
 FBSplitExecution >> initialize [
 	super initialize.
-	id := FBIdGenerator current newId
+	id := FBIdGenerator current newId.
+	cancelledBranches := 0
+]
+
+{ #category : 'testing' }
+FBSplitExecution >> isExhausted [
+	"were all my branches taken back? Then nothing of this pass is on its way any more"
+	^ cancelledBranches >= branchCount
 ]
 
 { #category : 'accessing' }

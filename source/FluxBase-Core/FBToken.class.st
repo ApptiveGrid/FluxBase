@@ -216,6 +216,17 @@ FBToken >> splitId [
 ]
 
 { #category : 'testing' }
+FBToken >> isFrontOfItsPass [
+	"do I stand for one branch of my pass - the one token of that branch that is on its
+	way to the join? Only while I live in the scope the pass was opened in. A token of
+	an iteration or of a sub flow inside the branch is nested in a lifetime of its own;
+	it may fall without the branch falling, the scope join or the frame goes on for it,
+	so it is not what the pass counts when it is taken back
+	(FBFlowInstance>>accountCancelledBranchesOf:)"
+	^ split notNil and: [ split scope == scope ]
+]
+
+{ #category : 'testing' }
 FBToken >> isWaiting [
 	"am I parked at a wait? Read by FBBaseActivation>>state, which reports #waiting for
 	the step that parked me - see my class comment"
