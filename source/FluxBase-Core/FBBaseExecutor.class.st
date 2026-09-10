@@ -238,6 +238,18 @@ FBBaseExecutor >> takeTokenForSuspended: anObject [
 ]
 
 { #category : 'accessing' }
+FBBaseExecutor >> tokenForSuspended: anObject satisfying: aBlock [
+	"the first token stored for anObject that aBlock accepts, left where it is - the one
+	#takeTokenForSuspended:satisfying: would take. For a look before the taking
+	(#resume:withToken:value:)"
+	| tokens |
+	suspendedTokens ifNil: [ ^ nil ].
+	tokens := suspendedTokens at: anObject ifAbsent: [ ^ nil ].
+	(tokens isKindOf: Collection) ifFalse: [ ^ (aBlock value: tokens) ifTrue: [ tokens ] ifFalse: [ nil ] ].
+	^ tokens detect: aBlock ifNone: [ nil ]
+]
+
+{ #category : 'accessing' }
 FBBaseExecutor >> takeTokenForSuspended: anObject satisfying: aBlock [
 	"answer and forget the first token stored for anObject that aBlock accepts, or nil.
 
@@ -334,10 +346,14 @@ FBBaseExecutor >> resume: aSuspension withToken: aToken value: aValue [
 	submitted on it"
 
 	| token |
-	token := self
-		takeTokenForSuspended: aSuspension
-		satisfying: [ :each | aToken isNil or: [ each == aToken ] ].
-	token := aToken ifNil: [ token ].
+	token := aToken ifNil: [ self tokenForSuspended: aSuspension satisfying: [ :each | true ] ].
+	"a wait going on is what decides a deferred choice its strand lies on: the branches
+	that did not go on fall now (FBFlowInstance>>decideDeferredChoiceWonBy:). Before the
+	wait itself is taken out: the withdrawal settles the executors, and one that saw
+	nothing pending and nothing suspended - the wait going on being in flight - would
+	take itself for finished and close its scope under the resumed strand"
+	token ifNotNil: [ flowInstance decideDeferredChoiceWonBy: token ].
+	self takeTokenForSuspended: aSuspension satisfying: [ :each | aToken isNil or: [ each == aToken ] ].
 	flowInstance dropWaitingEntriesMatching: aSuspension token: token.
 	suspended remove: aSuspension.
 	^ aSuspension resumeIn: self withToken: token value: aValue

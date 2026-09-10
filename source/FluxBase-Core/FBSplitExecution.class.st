@@ -21,6 +21,11 @@ I answer what the join needs to know and what the tokens alone cannot say:
 	scope		the FBScope the pass runs in - what the FBJoinState made for me
 			falls with (FBFlowInstance>>scopeEnded:)
 	id		my identity for the outside: FBToken>>splitId and the event log
+	origin		the token of the split's own activation - every branch's first token is
+			a child of it (#branchOf:), which is how a deferred choice tells the
+			winning branch from the rest (FBFlowInstance>>decideDeferredChoice:wonBy:)
+	decided		for a deferred choice: whether one branch has gone on and the others
+			fell; a later wait on the winner's way decides nothing more
 	cancelledBranches
 			how many of my branches were taken back and will never arrive
 			(FBFlowInstance>>accountCancelledBranchesOf:). The join counts them
@@ -43,7 +48,9 @@ Class {
 		'outer',
 		'branchCount',
 		'scope',
-		'cancelledBranches'
+		'cancelledBranches',
+		'origin',
+		'decided'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -56,6 +63,7 @@ FBSplitExecution class >> openedBy: anActivation branchCount: anInteger [
 	split execution and in the scope its token carries"
 	^ self new
 		node: anActivation node;
+		origin: anActivation token;
 		outer: anActivation token split;
 		scope: anActivation token scope;
 		branchCount: anInteger;
@@ -85,6 +93,37 @@ FBSplitExecution >> cancelledBranches [
 ]
 
 { #category : 'accessing' }
+FBSplitExecution >> branchOf: aToken [
+	"the first token of the branch aToken lies on - the child of #origin among its
+	ancestors, aToken itself included - or nil when aToken does not descend from this
+	pass's split at all"
+	| current |
+	current := aToken.
+	[ current notNil and: [ current parent ~~ origin ] ] whileTrue: [ current := current parent ].
+	^ current
+]
+
+{ #category : 'deciding' }
+FBSplitExecution >> decide [
+	decided := true
+]
+
+{ #category : 'testing' }
+FBSplitExecution >> isDecided [
+	^ decided == true
+]
+
+{ #category : 'accessing' }
+FBSplitExecution >> origin [
+	^ origin
+]
+
+{ #category : 'accessing' }
+FBSplitExecution >> origin: aToken [
+	origin := aToken
+]
+
+{ #category : 'accessing' }
 FBSplitExecution >> id [
 	^ id
 ]
@@ -93,7 +132,8 @@ FBSplitExecution >> id [
 FBSplitExecution >> initialize [
 	super initialize.
 	id := FBIdGenerator current newId.
-	cancelledBranches := 0
+	cancelledBranches := 0.
+	decided := false
 ]
 
 { #category : 'testing' }

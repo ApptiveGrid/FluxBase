@@ -185,11 +185,11 @@ FBCancellationTest >> testCancellingAParkedTransitionTakesItsAddressAndLeavesThe
 { #category : 'tests' }
 FBCancellationTest >> testCancellingIntoASubFlowTakesTheChildsStrands [
 	"the child's strands descend from the caller's token (FBFlowInstance>>descendFrom:),
-	so cancelling the calling strand reaches a wait inside the sub flow. The child is
-	then over without an end, and until a cancelled scope carries that as its state,
-	the frame fails its caller the way an errored child does - the instance stops in
-	#error rather than hanging on a frame nothing will pop"
-	| child parent instance caller wait |
+	so cancelling the calling strand reaches a wait inside the sub flow. The call's own
+	token falls with the strand - the sub flow node stands, unqueued, and is part of it -
+	so the frame pops quietly, the call reads #cancelled, and with nothing left the
+	instance is over"
+	| child parent instance caller wait waitToken |
 	child := self flowWaitingFromOutside.
 	parent := self flowCalling: child.
 	instance := parent newInstance.
@@ -197,15 +197,18 @@ FBCancellationTest >> testCancellingIntoASubFlowTakesTheChildsStrands [
 	self assert: instance state equals: #waiting.
 	caller := instance activations detect: [ :each | each node isKindOf: FBSubFlowNode ].
 	wait := instance suspended first.
+	waitToken := instance openWaitingEntries first token.
 	self assertConsistent: instance.
 
-	self assert: (instance cancelStrand: caller token) size equals: 1.
+	self assert: (instance cancelStrand: caller token) asSet equals: { waitToken. caller token } asSet.
 
 	self assert: instance suspended isEmpty.
 	self assert: instance subFlowInstances first suspended isEmpty.
 	self assert: (instance subFlowInstances first activations detect: [ :each | each node == wait ]) state equals: #cancelled.
-	self assert: instance state equals: #error.
-	self assert: instance atEnd.
+	self assert: caller state equals: #cancelled.
+	self assert: instance isRootExecutor.
+	self assert: instance state equals: #done.
+	self assert: instance hasEnded.
 	self assert: (self cancelledEventsOf: instance) size equals: 1.
 	self assertConsistent: instance
 ]

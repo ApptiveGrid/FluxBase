@@ -89,6 +89,12 @@ FBRemoteFlowTask >> isExternallyResumable [
 	^ true
 ]
 
+{ #category : 'testing' }
+FBRemoteFlowTask >> parksOnEntry [
+	"I always park: my result comes from outside (FBRemoteFlowBehavior)"
+	^ true
+]
+
 { #category : 'accessing' }
 FBRemoteFlowTask >> maxWait [
 	^ maxWait

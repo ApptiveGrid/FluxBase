@@ -16,9 +16,12 @@ FBWaitForConditionBehavior >> execute [
 
 	A condition that holds is a step that is over: marked #done like any task's, since
 	nothing marks a step done centrally and this activation would otherwise stay
-	#created in the log"
+	#created in the log. It is also a wait that went on, at once - which decides a
+	deferred choice this strand lies on the way a resumed wait does
+	(FBFlowInstance>>decideDeferredChoiceWonBy:)"
 	(self node evaluateConditionWith: activation argument)
 		ifTrue: [
+			activation instance decideDeferredChoiceWonBy: activation token.
 			activation done.
 			activation followAllOutgoing ]
 		ifFalse: [ activation waitForNode: self node withToken: activation token ]
