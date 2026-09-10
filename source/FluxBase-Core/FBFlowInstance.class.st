@@ -188,9 +188,14 @@ FBFlowInstance >> descendFrom: aToken [
 ]
 
 { #category : 'executing' }
-FBFlowInstance >> dropWaitingEntriesMatching: aSuspension [
-	"forget every address of mine that names aSuspension - the step a continuation makes
-	before it takes the suspension out, see FBBaseExecutor>>resume:withToken:value:.
+FBFlowInstance >> dropWaitingEntriesMatching: aSuspension token: aToken [
+	"forget the address of mine that names the wait going on: aSuspension, parked on
+	aToken - the step a continuation makes as it takes the suspension out, see
+	FBBaseExecutor>>resume:withToken:value:. The token tells the wait's entry apart from
+	the entries of other strands parked at the same suspension - two iterations of a
+	parallel scope wait at one transition or node, one entry each - which keep theirs.
+	With no token to go by (nil: a suspension parked before tokens were kept) every entry
+	of the suspension falls, there being nothing to tell them apart.
 
 	Mine only, by design: an entry is registered on the instance whose executor holds the
 	suspension (FBBaseActivation>>waitForNode:withToken:), and the executor resuming is
@@ -200,7 +205,9 @@ FBFlowInstance >> dropWaitingEntriesMatching: aSuspension [
 	registered here - then there is nothing to forget and nothing is created"
 
 	(waitingRegistry ifNil: [ ^ self ]) entries
-		select: [ :each | each matchesSuspension: aSuspension ]
+		select: [ :each |
+			(each matchesSuspension: aSuspension)
+				and: [ aToken isNil or: [ each token == aToken ] ] ]
 		thenDo: [ :each | waitingRegistry takeEntryFor: each correlationId ]
 ]
 
