@@ -219,3 +219,12 @@ FBDeferredChoiceTest >> testABranchThatCannotWaitIsRejected [
 	self assert: seen isEmpty.
 	self assert: ((instance events detect: [ :each | each isKindOf: FBNodeActivationErrored ]) message includesSubstring: 'waits')
 ]
+
+{ #category : 'tests' }
+FBDeferredChoiceTest >> testTheChoiceStaysOutOfTheExposedNodeSetForNow [
+	"ApptiveGrid offers every non-abstract node class to its client as a type to pick;
+	the client knows no deferred choice yet, so the class reads abstract the way
+	FBRemoteFlowTask and FBTerminateEvent do - and stays instantiable"
+	self assert: FBDeferredChoice isAbstract.
+	self assert: (FBDeferredChoice named: 'choice') isDeferredChoice
+]
