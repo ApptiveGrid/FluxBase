@@ -80,3 +80,10 @@ FBWaitingAddress >> liesInScope: aScope [
 	the instance"
 	^ self subclassResponsibility
 ]
+
+{ #category : 'testing' }
+FBWaitingAddress >> tokenSatisfies: aBlock [
+	"does the token I stand on - a parked strand's own for an entry, the anchor for a
+	reservation - satisfy aBlock? What a withdrawal asks to take me along with my strand"
+	^ self subclassResponsibility
+]

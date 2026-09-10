@@ -836,3 +836,63 @@ FBFlowInstance >> scopeEnded: aScope [
 			select: [ :each | each liesInScope: aScope ]
 			thenDo: [ :each | waitingRegistry takeEntryFor: each correlationId ] ]
 ]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> withdrawStrandsSatisfying: aBlock [
+	"the core of cancellation: take every strand whose token aBlock accepts out of the
+	active chain - me and the instances executing inside me - and answer the tokens
+	taken. Out of the executors' queues (FBBaseExecutor>>withdrawTokensSatisfying:) and
+	out of the registries: an address that stood on such a token falls, so a signal on
+	it is as silent as on a consumed one. Every token taken is #cancelled; a standing
+	activation on one reads that off it and stays in the log.
+
+	Then the executor on top of each instance is settled, innermost first: a parallel
+	scope whose queue emptied moves on or stops, a sub flow frame whose child is over
+	pops - things a step would have done and no step will do now. And when that leaves
+	me over, I have ended the way any run ends"
+
+	| taken |
+	taken := OrderedCollection new.
+	self activeFlowInstances do: [ :each |
+		each executors do: [ :executor | taken addAll: (executor withdrawTokensSatisfying: aBlock) ].
+		each dropWaitingAddressesOnTokensSatisfying: aBlock ].
+	taken do: [ :token | token cancelled ].
+	taken ifEmpty: [ ^ taken ].
+	self activeFlowInstances reverseDo: [ :each |
+		each executor ifNotNil: [ :top | top settleAfterWithdrawal ] ].
+	(self atEnd and: [ self hasErrors not ]) ifTrue: [ self ended ].
+	^ taken
+]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> dropWaitingAddressesOnTokensSatisfying: aBlock [
+	"my own registry only, like every registry step: an address stands on the token of
+	the instance that registered it"
+	waitingRegistry ifNil: [ ^ self ].
+	(waitingRegistry entries select: [ :each | each tokenSatisfies: aBlock ])
+		do: [ :each | waitingRegistry takeEntryFor: each correlationId ]
+]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> cancelStrand: aToken [
+	"cancel one strand of execution: aToken and everything that descends from it -
+	through FBToken>>parent, which FBFlowInstance>>descendFrom: continues into a called
+	sub flow. Its queued work, its waits and its addresses fall (#withdrawStrandsSatisfying:),
+	its tokens read #cancelled, and the log gets one FBStrandCancelled for the operation
+	and an FBNodeActivationCancelled for every activation that stood on a wait taken.
+	Answers the tokens taken - empty, and without a trace, when nothing of the strand
+	was left: cancelling twice is cancelling once.
+
+	This is Cancel Activity (WCP-19), and the selection an abbrechender Join makes over
+	its siblings. Joins do not yet know about cancelled branches - a join a cancelled
+	branch was heading to keeps waiting for it; that is the next slice"
+
+	| taken |
+	taken := self withdrawStrandsSatisfying: [ :each | each == aToken or: [ each hasAncestor: aToken ] ].
+	taken ifEmpty: [ ^ taken ].
+	taken do: [ :token |
+		token activation ifNotNil: [ :activation |
+			self addEvent: (FBNodeActivationCancelled new activation: activation) ] ].
+	self addEvent: (FBStrandCancelled new token: aToken).
+	^ taken
+]

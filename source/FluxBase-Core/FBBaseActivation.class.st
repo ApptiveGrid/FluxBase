@@ -191,8 +191,12 @@ FBBaseActivation >> state [
 	throwaway token for activations persisted before that ivar existed, and a fresh
 	token is #ready - every one of those finished activations would report itself
 	ready. The ivar is the fallback for them, and #waiting is the only value it no
-	longer receives."
-	token ifNotNil: [ token isWaiting ifTrue: [ ^ #waiting ] ].
+	longer receives. #cancelled is the token's as well: a strand that was taken back
+	while I stood on it (FBFlowInstance>>cancelStrand:) - I stay in the log, and that is
+	what I read."
+	token ifNotNil: [
+		token isCancelled ifTrue: [ ^ #cancelled ].
+		token isWaiting ifTrue: [ ^ #waiting ] ].
 	^ state
 ]
 

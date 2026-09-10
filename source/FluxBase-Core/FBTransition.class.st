@@ -175,3 +175,13 @@ FBTransition >> token [
 	token"
 	^ nil
 ]
+
+{ #category : 'cancelling' }
+FBTransition >> strandWithdrawn: aToken [
+	"the strand parked on me - aToken - was taken back. The step that parked it was my
+	source's, and it marked its own token #waiting (FBBaseActivation>>waitForNode:
+	withToken:); aToken is that token's child. The mark comes off the way
+	#resumeIn:withToken:value: takes it off: the wait is over, if not the way it was
+	meant to end. A token from before #parent was a reference stops the walk"
+	aToken parent ifNotNil: [ :parked | parked resumed ]
+]

@@ -287,3 +287,11 @@ FBParallelExecutor >> isDone [
 	inherited answer said #done in the middle of the loop"
 	^ self atEnd
 ]
+
+{ #category : 'cancelling' }
+FBParallelExecutor >> settleAfterWithdrawal [
+	"go on the way #step would have: close finished iterations, start the next one, or
+	stop when the list is done and nothing waits. Only while I am the executor on top -
+	below a frame the frame's popping resumes me anyway (#resumeAfter:)"
+	flowInstance executor == self ifTrue: [ self continue ]
+]
