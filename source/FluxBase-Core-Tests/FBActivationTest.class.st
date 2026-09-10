@@ -7,16 +7,17 @@ Class {
 
 { #category : 'as yet unclassified' }
 FBActivationTest >> testChildTokenCarriesParentageAndScopeAndSplitForward [
-	| activation child scope |
+	| activation child scope split |
 	scope := FBScope new.
+	split := FBSplitExecution new.
 	activation := FBActivation new.
 	activation token
 		scope: scope;
-		splitId: 'split-1'.
+		split: split.
 	child := activation childToken.
 	self assert: child parent equals: activation token.
 	self assert: child scope equals: scope.
-	self assert: child splitId equals: 'split-1'.
+	self assert: child split identicalTo: split.
 	self deny: child id equals: activation token id
 ]
 

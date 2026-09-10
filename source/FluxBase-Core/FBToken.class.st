@@ -19,9 +19,11 @@ to the token it came from.
 			cannot tell two passes of a loop apart. Read via
 			FBBaseActivation>>sourceNode to attribute each branch arriving at a
 			join to the node it came from.
-	splitId		shared by every token one split execution created. Keys the
-			FBJoinState, so a second pass through the same split gets its own
-			join state instead of colliding with the first.
+	split		the FBSplitExecution I am a branch of: the pass through a split that
+			created my line, shared by every token of that pass and given back
+			to the enclosing pass behind the join. Keys the FBJoinState, so a
+			second pass through the same split gets its own join state instead
+			of colliding with the first. Nil at the outermost level.
 	scope		the FBScope I live in
 
 My #parent and FBScope>>outer are deliberately named apart because they are
@@ -36,10 +38,11 @@ reference. That is also why #node is derived from #activation instead of being
 stored: a token that knows its activation knows its node, and a stored copy could
 only drift out of step with it.
 
-Two legacy fields, #parentId and #scopeId, remain readable for tokens persisted
-before this: for those #parent is nil and FBBaseActivation>>sourceNode falls back
-to resolving the old id. Nothing writes them any more, and they can be dropped
-once no such tokens are left in any store.
+Three legacy fields, #parentId, #scopeId and #splitId, remain readable for tokens
+persisted before this: for those #parent is nil and FBBaseActivation>>sourceNode falls
+back to resolving the old id, and #splitId answers the stored id where there is no
+#split to derive it from. Nothing writes them any more, and they can be dropped once
+no such tokens are left in any store.
 
 My #state says whether this strand is running or parked: #ready or #waiting - and #ready
 again once the wait was resumed (#resumed) - or #cancelled, once the strand was taken
@@ -49,7 +52,7 @@ started it, which is why it is mine and not the activation's; the three step
 statements - #created, #done, #error - stay on FBBaseActivation, and its #state
 answers #waiting off me.
 
-#splitId, #parent, #scope and #state drive decisions. A #metadata field once lived here
+#split, #parent, #scope and #state drive decisions. A #metadata field once lived here
 too; it never had a reader - the engine keeps the current value on the activation, not
 on me - and is gone.
 "
@@ -61,6 +64,7 @@ Class {
 		'activation',
 		'scope',
 		'parent',
+		'split',
 		'splitId',
 		'state',
 		'parentId',
@@ -192,14 +196,23 @@ FBToken >> scope: aFBScope [
 	scope := aFBScope
 ]
 
-{ #category : 'as yet unclassified' }
-FBToken >> splitId [
-	^ splitId
+{ #category : 'accessing' }
+FBToken >> split [
+	"the pass through a split I am a branch of, see my class comment - nil at the
+	outermost level and for tokens persisted before splits were objects"
+	^ split
 ]
 
-{ #category : 'as yet unclassified' }
-FBToken >> splitId: anObject [
-	splitId := anObject
+{ #category : 'accessing' }
+FBToken >> split: aSplitExecution [
+	split := aSplitExecution
+]
+
+{ #category : 'accessing' }
+FBToken >> splitId [
+	"the id of my split, for the outside (FBNodeActivationEvent>>splitId) - off the
+	split itself, or the stored id for a token persisted before splits were objects"
+	^ split ifNotNil: [ :each | each id ] ifNil: [ splitId ]
 ]
 
 { #category : 'testing' }

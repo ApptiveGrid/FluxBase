@@ -90,16 +90,19 @@ FBParallelExecutorTest >> testAndJoinInsideAParallelScopeReachesTheNodeBehindItO
 	(FBJoinBehavior>>arrivalKey), and the join never saw its second branch. Nothing
 	behind the join ever ran - while the instance still reported itself #done, so the
 	missing half of the result was invisible."
-	| start fork split a b join after end flow instance splitIds |
+	| start fork split a b join after end flow instance splitIds afterRuns |
 	splitIds := OrderedCollection new.
+	afterRuns := 0.
 	start := FBStartEvent new.
 	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
 	split := fork addOutgoingNode: (FBAndSplit named: 'split').
-	a := (FBPluggableTask named: 'a') block: [ :act | act value: act argument + 1 ].
+	a := (FBPluggableTask named: 'a') block: [ :act |
+		splitIds add: act token splitId.
+		act value: act argument + 1 ].
 	b := (FBPluggableTask named: 'b') block: [ :act | act value: act argument * 10 ].
 	join := FBAndJoin named: 'join'.
 	after := (FBPluggableTask named: 'after') block: [ :act |
-		splitIds add: act token splitId.
+		afterRuns := afterRuns + 1.
 		act value: act argument ].
 	split --> a --> join.
 	split --> b --> join.
@@ -114,11 +117,13 @@ FBParallelExecutorTest >> testAndJoinInsideAParallelScopeReachesTheNodeBehindItO
 	self assert: instance state equals: #done.
 	"the node behind the join runs once per iteration of the fork, not once for the
 	whole scope - and never zero times"
-	self assert: splitIds size equals: 2.
-	self deny: (splitIds anySatisfy: [ :each | each isNil ]).
+	self assert: afterRuns equals: 2.
 	"every iteration passes through the split again, so it is its own split execution
 	and gets its own FBJoinState instead of finding the previous pass's already
-	released one"
+	released one. Read off a branch: behind the join the token is a branch of the
+	enclosing pass again, and the fork opens none"
+	self assert: splitIds size equals: 2.
+	self deny: (splitIds anySatisfy: [ :each | each isNil ]).
 	self assert: splitIds asSet size equals: 2
 ]
 { #category : 'as yet unclassified' }
