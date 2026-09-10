@@ -27,12 +27,6 @@ FBFlowEvent >> initialize [
 ]
 
 { #category : 'accessing' }
-FBFlowEvent >> logTrace [
-
-	^ self subclassResponsibility 
-]
-
-{ #category : 'accessing' }
 FBFlowEvent >> message [
 
 	^ self subclassResponsibility 

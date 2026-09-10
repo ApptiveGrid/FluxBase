@@ -98,12 +98,6 @@ FBBaseActivation >> flowInstance [
 ]
 
 { #category : 'as yet unclassified' }
-FBBaseActivation >> followAll: aCollection [
-	aCollection do: [ :transition |
-		 self followTransition: transition ]
-]
-
-{ #category : 'as yet unclassified' }
 FBBaseActivation >> followAllOutgoing [
 	self followAllOutgoingInSplit: self token split
 ]

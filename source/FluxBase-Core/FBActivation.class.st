@@ -79,17 +79,6 @@ FBActivation >> printOn: aStream [
 ]
 
 { #category : 'accessing' }
-FBActivation >> returnValue: anInteger [ 
-	self shouldBeImplemented.
-]
-
-{ #category : 'as yet unclassified' }
-FBActivation >> suspend [
-	self waiting.
-	executor addWaiting: node
-]
-
-{ #category : 'accessing' }
 FBActivation >> value [
 
 	^ value

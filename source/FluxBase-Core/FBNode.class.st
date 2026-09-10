@@ -206,11 +206,6 @@ FBNode >> flow: aFBFlow [
 
 ]
 
-{ #category : 'testing' }
-FBNode >> hasOutgoing [ 
-	^ outgoing notEmpty
-]
-
 { #category : 'accessing' }
 FBNode >> id [
 	^ id
