@@ -151,11 +151,15 @@ FBSubFlowExecutor >> suspended [
 
 { #category : 'cancelling' }
 FBSubFlowExecutor >> settleAfterWithdrawal [
-    "the strands taken out may have been the child's last: then the child is at its end
-    without ever having reached its end node, and nothing would pop this frame. Until a
-    cancelled scope carries that as its state (the next slice of Scope und Abbruch), the
-    caller is failed the way an errored child without an #error transition fails it -
-    the frame pops, the caller's activation is marked, the instance stops in #error"
+    "the strands taken out may have been the child's last. A child whose scope was
+    cancelled - on its own or with the caller's - is over by decision: the frame pops
+    without a result and without an error, the call itself reads #cancelled. A child
+    that is over without an end for another reason - a strand cancelled inside it,
+    Cancel Activity - fails its caller the way an errored child without an #error
+    transition does, until a cancelling join gives that case a shape of its own"
+    childInstance isCancelled ifTrue: [
+        callerActivation token cancelled.
+        ^ self popThenResume: [ ] ].
     childInstance atEnd ifFalse: [ ^ self ].
     (childInstance activations anySatisfy: [ :each | each node == childInstance flow end ])
         ifTrue: [ self finish ]

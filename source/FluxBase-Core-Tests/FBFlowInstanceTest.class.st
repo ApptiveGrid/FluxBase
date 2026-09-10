@@ -370,14 +370,16 @@ FBFlowInstanceTest >> testStepping [
 { #category : 'private' }
 FBFlowInstanceTest >> assertStateInvariantsOf: anInstance [
 	"the promises FBFlowInstance>>state rests on, checked at one step boundary: the state
-	is one of five and never nil; #done means over and nothing failed; #waiting means
-	nothing can advance without an impulse; every executor on the stack that calls
-	itself done is at its end; and no open address is hidden before the end"
+	is one of six and never nil; #cancelled means the root scope fell; #done means over,
+	nothing failed and nothing was cancelled; #waiting means nothing can advance without
+	an impulse; every executor on the stack that calls itself done is at its end; and no
+	open address is hidden before the end"
 	| state |
 	state := anInstance state.
-	self assert: (#( created running waiting done error ) includes: state) description: 'state ', state printString.
-	self assert: (state = #done) equals: (anInstance atEnd and: [ anInstance hasErrors not ]).
-	self assert: (state = #waiting) equals: anInstance isWaiting.
+	self assert: (#( cancelled created running waiting done error ) includes: state) description: 'state ', state printString.
+	self assert: (state = #cancelled) equals: anInstance isCancelled.
+	self assert: (state = #done) equals: (anInstance atEnd and: [ anInstance hasErrors not and: [ anInstance isCancelled not ] ]).
+	self assert: (state = #waiting) equals: (anInstance isWaiting and: [ anInstance isCancelled not ]).
 	state = #waiting ifTrue: [ self deny: anInstance executor hasPending ].
 	anInstance activeExecutors do: [ :each |
 		self assert: (each isDone not or: [ each atEnd ]) description: each printString, ' is done but not at its end' ].

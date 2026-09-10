@@ -27,7 +27,8 @@ the executors' pending and suspended bookkeeping and the waiting registry
 			arrived through. 'outer' rather than 'parent' because that is the
 			established vocabulary for scopes, and it keeps the two relations apart
 	ownerNode	the node that opened me, nil for a root
-	state		#active while I am alive; #cancelled once cancellation exists
+	state		#active while I am alive, #cancelled once I was cancelled (#cancelled);
+			#isCancelled asks my outer scopes as well
 
 #depth is the nesting depth, derived by walking #outer. #callDepth counts only the
 scopes a sub flow call opened, which is what the recursion guard has to compare: an
@@ -144,4 +145,22 @@ FBScope >> encloses: aScope [
 FBScope >> isCall [
 	"was I opened by a sub flow call? Asked of my owner, see FBNode>>opensCallScope"
 	^ ownerNode notNil and: [ ownerNode opensCallScope ]
+]
+
+{ #category : 'cancelling' }
+FBScope >> cancelled [
+	"I am over by decision: nothing that lives in me runs on, and nothing new is taken
+	in. Set by FBFlowInstance>>cancelScope:, which then takes my strands back. Read
+	through #isCancelled, which walks #outer: cancelling a scope cancels everything
+	nested in it without touching the nested scopes' own state"
+	state := #cancelled
+]
+
+{ #category : 'testing' }
+FBScope >> isCancelled [
+	"am I cancelled, or nested in a scope that is? The rule every executor enforces:
+	FBBaseExecutor>>addPending:withToken: queues nothing for a token in such a scope,
+	and FBBaseActivation>>waitForNode:withToken: parks none"
+	state = #cancelled ifTrue: [ ^ true ].
+	^ outer notNil and: [ outer isCancelled ]
 ]
