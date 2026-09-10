@@ -13,12 +13,12 @@ Class {
 
 { #category : 'accessing' }
 FBParallelActivation >> argument [ 
-	^ arguments at: executor index
+	^ arguments at: self iterationIndex
 ]
 
 { #category : 'accessing' }
 FBParallelActivation >> argument: anObject [ 
-	arguments at: executor index put: anObject 
+	arguments at: self iterationIndex put: anObject
 ]
 
 { #category : 'accessing' }
@@ -37,11 +37,10 @@ FBParallelActivation >> done [
 
 { #category : 'accessing' }
 FBParallelActivation >> currentValue [
-	"the counterpart of #value:, which writes values at: executor index while #value
-	answers the whole per-iteration array - executor being this activation's *creating*
-	executor, i.e. the enclosing scope, exactly as for #argument"
+	"the counterpart of #value:, which writes one slot of the per-iteration array while
+	#value answers the whole array - the slot of my token's iteration, see #iterationIndex"
 
-	^ values at: executor index
+	^ values at: self iterationIndex
 ]
 
 { #category : 'initialization' }
@@ -55,14 +54,14 @@ FBParallelActivation >> initializeValues: anInteger [
 { #category : 'as yet unclassified' }
 FBParallelActivation >> metadataAt: key ifAbsent: aBlock [
 
-	^ (self metadataAtIndex: executor index) at: key 
+	^ (self metadataAtIndex: self iterationIndex) at: key
 		ifAbsent: aBlock
 ]
 
 { #category : 'as yet unclassified' }
 FBParallelActivation >> metadataAt: key put: anObject [ 
 
-	(self metadataAtIndex: executor index) at: key 
+	(self metadataAtIndex: self iterationIndex) at: key
 		put: anObject
 ]
 
@@ -117,8 +116,18 @@ FBParallelActivation >> value [
 ]
 
 { #category : 'accessing' }
-FBParallelActivation >> value: anObject [ 
-	values at: executor index put: anObject 
+FBParallelActivation >> value: anObject [
+	values at: self iterationIndex put: anObject
+]
+
+{ #category : 'accessing' }
+FBParallelActivation >> iterationIndex [
+	"my slot in the per-iteration arrays: the iteration my token belongs to, asked of
+	my creating executor - the parallel scope I run in (FBParallelExecutor>>iterationOf:).
+	I am one activation for all iterations of my node, so the slot cannot be mine to
+	keep; and it is not the executor's cursor either: that points at the newest
+	iteration, while I may be running for an earlier one that waited"
+	^ executor iterationOf: self token
 ]
 
 { #category : 'accessing' }

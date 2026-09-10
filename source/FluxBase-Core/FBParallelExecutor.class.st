@@ -8,7 +8,8 @@ Class {
 		'map',
 		'iterationScope',
 		'iterationScopeIndex',
-		'openIterationScopes'
+		'openIterationScopes',
+		'current'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -108,6 +109,39 @@ FBParallelExecutor >> isParallel [
 ]
 
 { #category : 'accessing' }
+FBParallelExecutor >> iterationOf: aToken [
+	"the slot of the iteration aToken belongs to, read off the iteration scope its scope
+	lies in (FBScope>>iterationOwnedBy:). This is what an activation that runs late has
+	to write into and read from: a wait resumed after the loop went on to the next
+	iteration, whose step comes when #index already points further. A token without a
+	scope - persisted before iterations had one - or with none of mine falls back to
+	the cursor, which is right whenever iterations do not overlap"
+	aToken ifNil: [ ^ index ].
+	^ (aToken scope ifNotNil: [ :scope | scope iterationOwnedBy: node ])
+		ifNil: [ index ]
+		ifNotNil: [ :iteration | iteration index ]
+]
+
+{ #category : 'accessing' }
+FBParallelExecutor >> currentIteration [
+	"the iteration whose step or resume is running - what the loop variable and a
+	predecessor's value are read for (#lastValueOf:, #outputFor:). #index is not that:
+	it is the newest iteration queued, and the loop moves on to the next one while an
+	earlier one still waits. Set by #step from the work item's token and by
+	#resume:withToken:value: from the token going on; the cursor before any step"
+	^ current ifNil: [ index ]
+]
+
+{ #category : 'executing' }
+FBParallelExecutor >> resume: aSuspension withToken: aToken value: aValue [
+	"a resume is a step of the iteration whose token goes on: what runs now reads the
+	loop off that iteration, see #currentIteration. A resume that names no token - the
+	oldest parked one goes on - reads off the cursor, as before"
+	current := self iterationOf: aToken.
+	^ super resume: aSuspension withToken: aToken value: aValue
+]
+
+{ #category : 'accessing' }
 FBParallelExecutor >> lastValueOf: aFBNode [
 	"resolve aFBNode's value for the iteration this executor is currently on.
 	when aFBNode's activation was created by this same executor (e.g. a task
@@ -120,10 +154,10 @@ FBParallelExecutor >> lastValueOf: aFBNode [
 	(see FBParallelJoinNodeBehavior, and the FluxBase 'nested parallel node'
 	ticket this fixes)"
 	| activation |
-	aFBNode == node ifTrue: [ ^ list at: index ].
+	aFBNode == node ifTrue: [ ^ list at: self currentIteration ].
 	activation := self activationOf: aFBNode.
 	^ (activation executor == self)
-		ifTrue: [ activation value at: index ]
+		ifTrue: [ activation value at: self currentIteration ]
 		ifFalse: [ activation value ]
 ]
 
@@ -182,9 +216,9 @@ FBParallelExecutor >> outputFor: anActivation [
 
 	self node == anActivation node ifTrue: [
 		(self activationOf: node) isDone ifTrue: [ ^ list first ].
-		^ list at: index ].
+		^ list at: self currentIteration ].
 	(self activationOf: node) isDone ifTrue: [ ^ anActivation value first ].
-	^ anActivation value at: self index
+	^ anActivation value at: (self iterationOf: anActivation token)
 ]
 
 { #category : 'private' }
@@ -240,6 +274,10 @@ FBParallelExecutor >> step [
 	| workItem transition lastValue |
 	workItem := pending removeFirst.
 	transition := workItem transition.
+	"the iteration this step belongs to, read off the work item's token: a body seed
+	(no token yet, see #scopeToken) is the newest iteration's, everything else carries
+	the token of the iteration that queued it"
+	current := workItem token ifNil: [ index ] ifNotNil: [ :token | self iterationOf: token ].
 	lastValue := transition source lastValueIn: self.
 
 	(self shouldFollowTransition: transition with: lastValue) ifTrue: [
@@ -265,6 +303,7 @@ FBParallelExecutor >> currentIterationScope [
 	iterationScopeIndex = index ifTrue: [ ^ iterationScope ].
 	iterationScope := ((self activationOf: node) token scope
 		ifNil: [ flowInstance ensureScope ]) childOwnedBy: node.
+	iterationScope index: index.
 	iterationScopeIndex := index.
 	openIterationScopes ifNil: [ openIterationScopes := OrderedCollection new ].
 	openIterationScopes add: iterationScope.

@@ -29,6 +29,9 @@ the executors' pending and suspended bookkeeping and the waiting registry
 	ownerNode	the node that opened me, nil for a root
 	state		#active while I am alive, #cancelled once I was cancelled (#cancelled);
 			#isCancelled asks my outer scopes as well
+	index		for the scope of one iteration of a parallel node: which iteration -
+			the slot in the per-iteration arrays of the activations inside that
+			scope (FBParallelExecutor>>iterationOf:). Nil for every other scope
 
 #depth is the nesting depth, derived by walking #outer. #callDepth counts only the
 scopes a sub flow call opened, which is what the recursion guard has to compare: an
@@ -41,7 +44,8 @@ Class {
 		'id',
 		'outer',
 		'ownerNode',
-		'state'
+		'state',
+		'index'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -75,6 +79,26 @@ FBScope >> depth [
     "How deeply I am nested, counting a root as 0. Derived by walking #outer rather
     than stored, so it can never disagree with the actual nesting."
     ^ outer ifNil: [ 0 ] ifNotNil: [ :aScope | aScope depth + 1 ]
+]
+
+{ #category : 'accessing' }
+FBScope >> index [
+	^ index
+]
+
+{ #category : 'accessing' }
+FBScope >> index: anInteger [
+	index := anInteger
+]
+
+{ #category : 'accessing' }
+FBScope >> iterationOwnedBy: aNode [
+	"the iteration of aNode - a parallel node - that I am or lie in: myself if aNode
+	opened me as one of its iterations, else what my outer scope answers, nil at the
+	root. A token inside a parallel scope reads its iteration off this, however deeply
+	nested in sub flow calls or inner loops it stands (FBParallelExecutor>>iterationOf:)"
+	(ownerNode == aNode and: [ index notNil ]) ifTrue: [ ^ self ].
+	^ outer ifNotNil: [ :each | each iterationOwnedBy: aNode ]
 ]
 
 { #category : 'as yet unclassified' }
