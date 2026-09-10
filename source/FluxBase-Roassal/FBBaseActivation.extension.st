@@ -10,7 +10,8 @@ FBBaseActivation >> stateBorder [
 		#running -> Color blue.
 		#waiting -> Color orange.
 		#done -> Color green.
-		#error -> Color red } asDictionary.
+		#error -> Color red.
+		#cancelled -> Color lightGray } asDictionary.
 	currentState := self state.
 	border := RSBorder new
 		width: 2;

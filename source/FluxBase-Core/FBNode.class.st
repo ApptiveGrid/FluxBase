@@ -506,3 +506,10 @@ FBNode >> opensCallScope [
 	calling. See FBScope>>callDepth"
 	^ false
 ]
+
+{ #category : 'cancelling' }
+FBNode >> strandWithdrawn: aToken [
+	"the strand parked on me was taken back. Nothing to unmark here: a node parks its own
+	activation's token, and that is the token taken - it reads #cancelled now, see
+	FBToken>>cancelled. The counterpart of FBTransition>>strandWithdrawn:"
+]

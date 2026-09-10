@@ -386,3 +386,49 @@ FBBaseExecutor >> hasTokenIn: aScope [
 			ifTrue: [ tokens anySatisfy: [ :token | aScope encloses: token scope ] ]
 			ifFalse: [ aScope encloses: tokens scope ] ]
 ]
+
+{ #category : 'cancelling' }
+FBBaseExecutor >> withdrawTokensSatisfying: aBlock [
+	"take every strand whose token aBlock accepts out of my bookkeeping, and answer the
+	tokens taken: work items off #pending, and tokens off the queues in #suspendedTokens
+	- a suspension whose last token went falls out of #suspended with it, once per
+	token taken, since #suspended holds the same object once per parked strand. A
+	suspension that recorded no token (parked before tokens were kept), and a pending
+	entry from before work items existed, are never touched. The one place the queues
+	are emptied from outside a step; FBFlowInstance>>withdrawStrandsSatisfying: asks it
+	of every active executor and settles me afterwards"
+
+	| taken |
+	taken := OrderedCollection new.
+	(pending select: [ :each | each token notNil and: [ aBlock value: each token ] ]) do: [ :item |
+		pending remove: item.
+		taken add: item token ].
+	suspendedTokens ifNil: [ ^ taken ].
+	suspendedTokens keys do: [ :suspension |
+		| queue |
+		queue := suspendedTokens at: suspension.
+		(queue isKindOf: Collection)
+			ifTrue: [
+				(queue select: aBlock) do: [ :token |
+					queue remove: token.
+					suspended remove: suspension ifAbsent: [ ].
+					suspension strandWithdrawn: token.
+					taken add: token ].
+				queue ifEmpty: [ suspendedTokens removeKey: suspension ] ]
+			ifFalse: [
+				(aBlock value: queue) ifTrue: [
+					suspendedTokens removeKey: suspension.
+					suspended remove: suspension ifAbsent: [ ].
+					suspension strandWithdrawn: queue.
+					taken add: queue ] ] ].
+	^ taken
+]
+
+{ #category : 'cancelling' }
+FBBaseExecutor >> settleAfterWithdrawal [
+	"strands were taken out of my queues from outside a step (#withdrawTokensSatisfying:).
+	Whoever, like a parallel scope, would have moved on at the end of the step that
+	emptied its queue has to move on now, or nothing ever will - the runner sees
+	nothing pending and stops. Nothing to do for a plain executor: with nothing pending
+	and nothing suspended it is at its end, and the instance notices"
+]

@@ -42,7 +42,8 @@ to resolving the old id. Nothing writes them any more, and they can be dropped
 once no such tokens are left in any store.
 
 My #state says whether this strand is running or parked: #ready or #waiting - and #ready
-again once the wait was resumed (#resumed) - and #cancelled once cancellation exists. There is no #done - a strand ends by my
+again once the wait was resumed (#resumed) - or #cancelled, once the strand was taken
+back (FBFlowInstance>>cancelStrand:). A cancelled strand never runs or resumes again. There is no #done - a strand ends by my
 disappearing, not by my carrying a state that says so. A wait outlives the step that
 started it, which is why it is mine and not the activation's; the three step
 statements - #created, #done, #error - stay on FBBaseActivation, and its #state
@@ -223,3 +224,15 @@ FBToken >> waiting [
 	state := #waiting
 ]
 
+{ #category : 'accessing' }
+FBToken >> cancelled [
+	"my strand was taken back - out of every queue, wait and address - and goes on
+	nowhere. Set by the withdrawal in FBFlowInstance>>withdrawStrandsSatisfying:; an
+	activation that still stands on me reads #cancelled off me"
+	state := #cancelled
+]
+
+{ #category : 'testing' }
+FBToken >> isCancelled [
+	^ state = #cancelled
+]

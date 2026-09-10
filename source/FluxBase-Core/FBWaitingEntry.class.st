@@ -116,3 +116,8 @@ FBWaitingEntry >> liesInScope: aScope [
 	"my token is the parked strand's own"
 	^ token notNil and: [ aScope encloses: token scope ]
 ]
+
+{ #category : 'testing' }
+FBWaitingEntry >> tokenSatisfies: aBlock [
+	^ token notNil and: [ aBlock value: token ]
+]

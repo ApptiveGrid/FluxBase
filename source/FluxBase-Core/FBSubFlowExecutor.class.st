@@ -148,3 +148,16 @@ FBSubFlowExecutor >> suspended [
     FBFlowInstance>>activeExecutors instead"
     ^ suspended
 ]
+
+{ #category : 'cancelling' }
+FBSubFlowExecutor >> settleAfterWithdrawal [
+    "the strands taken out may have been the child's last: then the child is at its end
+    without ever having reached its end node, and nothing would pop this frame. Until a
+    cancelled scope carries that as its state (the next slice of Scope und Abbruch), the
+    caller is failed the way an errored child without an #error transition fails it -
+    the frame pops, the caller's activation is marked, the instance stops in #error"
+    childInstance atEnd ifFalse: [ ^ self ].
+    (childInstance activations anySatisfy: [ :each | each node == childInstance flow end ])
+        ifTrue: [ self finish ]
+        ifFalse: [ self failCallerWith: 'sub flow was cancelled before reaching its end' ]
+]

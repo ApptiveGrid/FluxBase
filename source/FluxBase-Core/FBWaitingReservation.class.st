@@ -123,3 +123,8 @@ FBWaitingReservation >> liesInScope: aScope [
 	descends from it, so it lives where the anchor lives"
 	^ anchorToken notNil and: [ aScope encloses: anchorToken scope ]
 ]
+
+{ #category : 'testing' }
+FBWaitingReservation >> tokenSatisfies: aBlock [
+	^ anchorToken notNil and: [ aBlock value: anchorToken ]
+]
