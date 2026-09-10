@@ -26,41 +26,11 @@ FBJoinBehavior >> execute [
 		split: activation token split
 		inScope: activation token scope.
 	joinState arrived at: self arrivalKey put: self argument.
+	joinState lastArrival: activation.
 	activation done.
-	"release once per FBJoinState. The condition is re-evaluated on every arrival, so
-	without the latch a join whose #expected is already satisfied fires again for each
-	further arrival - everything behind it would run a second time, with mail and
-	external calls as side effects. An #expected of 1 with two branches feeding the
-	join reaches this: the first arrival satisfies it and the second still finds it
-	satisfied."
-	joinState released ifTrue: [ ^ self ].
-	(joinState arrived size >= joinState expected size) ifTrue: [
-		joinState released: true.
-		activation value: (self outputFrom: joinState).
-		"the pass is closed: behind me the strand is a branch of the enclosing split
-		again, so the outgoing tokens get that one - or none at the outermost level"
-		activation followAllOutgoingInSplit: (joinState split ifNotNil: [ :split | split outer ]) ]
-]
-
-{ #category : 'as yet unclassified' }
-FBJoinBehavior >> outputFrom: aJoinState [
-	"the join's own output reads as sourceNode -> value, which is what a following node
-	can make sense of - PR #75 chose the node over the opaque branch identity for that
-	reason. #arrived is keyed by token so the branches stay countable (see #arrivalKey),
-	so re-key it here. Two branches that did arrive through the same predecessor collapse
-	at this point, but by then the join has already seen both and released."
-	| output |
-	output := Dictionary new.
-	aJoinState arrived keysAndValuesDo: [ :key :value |
-		output at: (self sourceNodeOf: key) put: value ].
-	^ output
-]
-
-{ #category : 'as yet unclassified' }
-FBJoinBehavior >> sourceNodeOf: anArrivalKey [
-	"#arrivalKey answers a token, or the node itself for tokens persisted without a
-	real #parent"
-	^ (anArrivalKey isKindOf: FBToken)
-		ifTrue: [ anArrivalKey node ]
-		ifFalse: [ anArrivalKey ]
+	"whether the join goes on, and once only, is the state's call (FBJoinState>>canRelease):
+	it knows the branches that arrived and the ones taken back. A branch taken back after
+	this arrival makes the state releasable from the withdrawal instead
+	(FBFlowInstance>>settlePass:) - no further arrival would come to ask"
+	joinState canRelease ifTrue: [ joinState releaseOn: activation instance executor ]
 ]

@@ -467,3 +467,284 @@ FBCancellationTest >> testCancellingTheCaseTakesStrandsWithoutAScopeToo [
 	self assert: instance suspended isEmpty.
 	self assert: instance state equals: #cancelled
 ]
+
+{ #category : 'helpers' }
+FBCancellationTest >> flowJoiningAWaitAndATask [
+	"start -> split -> wait (external) -> join -> after -> end
+	              \-> b (task)     -/"
+	| start split wait b join after |
+	start := FBStartEvent new.
+	split := start addOutgoingNode: (FBAndSplit named: 'split').
+	wait := split addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; name: 'wait'; yourself).
+	b := split addOutgoingNode: ((FBPluggableTask named: 'b') block: [ :act | act value: act argument * 10 ]).
+	join := FBAndJoin named: 'join'.
+	wait --> join.
+	b --> join.
+	after := join addOutgoingNode: ((FBPluggableTask named: 'after') block: [ :act | act value: act argument ]).
+	after addOutgoingNode: FBEndEvent new.
+	^ FBFlow new start: start
+]
+
+{ #category : 'helpers' }
+FBCancellationTest >> nodeNamed: aString in: anInstance [
+	^ anInstance flow nodes detect: [ :each | each name = aString ]
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingABranchBeforeItsSiblingArrivesLetsTheJoinGoOnWithTheRest [
+	"the branch falls while it is still queued; the sibling arrives later and finds the
+	pass one branch short - the join goes on with the sibling's value alone"
+	| flow instance wait queued after |
+	flow := self flowJoiningAWaitAndATask.
+	instance := flow newInstance.
+	instance initialValue: 1.
+	instance step. "start"
+	instance step. "split - both branches queued"
+	wait := self nodeNamed: 'wait' in: instance.
+	queued := instance executor pending detect: [ :each | each transition target == wait ].
+	self assertConsistent: instance.
+
+	instance cancelStrand: queued token.
+
+	self assertConsistent: instance.
+	instance execute.
+	after := instance activationOfNode: (self nodeNamed: 'after' in: instance).
+	self assert: after argument keys asArray equals: { self nodeNamed: 'b' in: instance }.
+	self assert: (after argument at: (self nodeNamed: 'b' in: instance)) equals: 10.
+	self assert: instance state equals: #done.
+	self deny: (instance activations anySatisfy: [ :each | each node == wait ]).
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingTheLastMissingBranchReleasesTheJoinFromTheWithdrawal [
+	"the sibling has arrived and the join waits for the branch that is now taken back:
+	no further arrival will come to ask, so the withdrawal itself releases the join,
+	and the node behind it is queued - the instance runs again"
+	| flow instance join after |
+	flow := self flowJoiningAWaitAndATask.
+	instance := flow newInstance.
+	instance executeWith: 1.
+	join := self nodeNamed: 'join' in: instance.
+	after := self nodeNamed: 'after' in: instance.
+	self assert: instance state equals: #waiting.
+	self assert: (instance activations select: [ :each | each node == join ]) size equals: 1.
+	self deny: (instance activations anySatisfy: [ :each | each node == after ]).
+	self assertConsistent: instance.
+
+	instance cancelStrand: instance openWaitingEntries first token.
+
+	self assert: instance state equals: #running.
+	self assert: (instance executor pending collect: [ :each | each transition target ]) asArray equals: { after }.
+	self assertConsistent: instance.
+	instance execute.
+	self assert: instance state equals: #done.
+	self assert: (instance activations select: [ :each | each node == after ]) size equals: 1.
+	self assert: (instance activationOfNode: after) argument keys asArray equals: { self nodeNamed: 'b' in: instance }.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingEveryBranchOfAPassReleasesNothingAndEndsTheInstance [
+	"both branches fall before either arrived: the join never runs, nothing behind it
+	runs, and with nothing left on its way the instance is over"
+	| start split waitA waitB join after flow instance |
+	start := FBStartEvent new.
+	split := start addOutgoingNode: (FBAndSplit named: 'split').
+	waitA := split addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	waitB := split addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	join := FBAndJoin named: 'join'.
+	waitA --> join.
+	waitB --> join.
+	after := join addOutgoingNode: (FBTask named: 'after').
+	after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+	self assert: instance openWaitingEntries size equals: 2.
+	self assertConsistent: instance.
+
+	instance cancelStrand: instance openWaitingEntries first token.
+	self assert: instance state equals: #waiting.
+	self assertConsistent: instance.
+	instance cancelStrand: instance openWaitingEntries first token.
+
+	self assert: instance state equals: #done.
+	self assert: instance hasEnded.
+	self deny: (instance activations anySatisfy: [ :each | each node == join ]).
+	self deny: (instance activations anySatisfy: [ :each | each node == after ]).
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingABranchInsideAnInnerPassLetsBothJoinsGoOn [
+	"a split nested in a branch of another: the inner pass loses a branch, its join goes
+	on with the other, and the outer join then sees that branch arrive next to its
+	sibling as if nothing had happened inside"
+	| start outer inner a1 a2 innerJoin b outerJoin after flow instance |
+	start := FBStartEvent new.
+	outer := start addOutgoingNode: (FBAndSplit named: 'outer').
+	inner := outer addOutgoingNode: (FBAndSplit named: 'inner').
+	a1 := inner addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	a2 := inner addOutgoingNode: ((FBPluggableTask named: 'a2') block: [ :act | act value: 2 ]).
+	innerJoin := FBAndJoin named: 'inner join'.
+	a1 --> innerJoin.
+	a2 --> innerJoin.
+	b := outer addOutgoingNode: ((FBPluggableTask named: 'b') block: [ :act | act value: 3 ]).
+	outerJoin := FBAndJoin named: 'outer join'.
+	innerJoin --> outerJoin.
+	b --> outerJoin.
+	after := outerJoin addOutgoingNode: ((FBPluggableTask named: 'after') block: [ :act | act value: act argument ]).
+	after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+	self assert: instance state equals: #waiting.
+	self assertConsistent: instance.
+
+	instance cancelStrand: instance openWaitingEntries first token.
+
+	self assert: instance state equals: #running.
+	self assertConsistent: instance.
+	instance execute.
+	self assert: instance state equals: #done.
+	self assert: (instance activations select: [ :each | each node == after ]) size equals: 1.
+	self assert: (instance activationOfNode: after) argument keys asSet equals: { innerJoin. b } asSet.
+	self assert: ((instance activationOfNode: after) argument at: innerJoin) equals: (Dictionary new at: a2 put: 2; yourself).
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingAWholeInnerPassCostsTheOuterOneExactlyOneBranch [
+	"both branches of the inner pass fall and nothing arrived at its join: the inner
+	join never runs, and the branch that led into the inner split is gone for the outer
+	pass - one branch, not two. The outer join, which already had the sibling, goes on
+	with it alone"
+	| start outer inner a1 a2 innerJoin b outerJoin after flow instance |
+	start := FBStartEvent new.
+	outer := start addOutgoingNode: (FBAndSplit named: 'outer').
+	inner := outer addOutgoingNode: (FBAndSplit named: 'inner').
+	a1 := inner addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	a2 := inner addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	innerJoin := FBAndJoin named: 'inner join'.
+	a1 --> innerJoin.
+	a2 --> innerJoin.
+	b := outer addOutgoingNode: ((FBPluggableTask named: 'b') block: [ :act | act value: 3 ]).
+	outerJoin := FBAndJoin named: 'outer join'.
+	innerJoin --> outerJoin.
+	b --> outerJoin.
+	after := outerJoin addOutgoingNode: ((FBPluggableTask named: 'after') block: [ :act | act value: act argument ]).
+	after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+	self assert: instance openWaitingEntries size equals: 2.
+	self assertConsistent: instance.
+
+	instance cancelStrand: instance openWaitingEntries first token.
+	"one inner branch down: the inner join could still be reached by the other, nothing
+	moves yet"
+	self assert: instance state equals: #waiting.
+	self deny: (instance activations anySatisfy: [ :each | each node == after ]).
+	self assertConsistent: instance.
+
+	instance cancelStrand: instance openWaitingEntries first token.
+
+	self assert: instance state equals: #running.
+	self assertConsistent: instance.
+	instance execute.
+	self assert: instance state equals: #done.
+	self deny: (instance activations anySatisfy: [ :each | each node == innerJoin ]).
+	self assert: (instance activations select: [ :each | each node == after ]) size equals: 1.
+	self assert: (instance activationOfNode: after) argument keys asArray equals: { b }.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingAMultiChoiceBranchCountsAgainstTheBranchesStarted [
+	"a multi choice started two of its three branches; one is taken back, and the join
+	goes on with the other - the branch never started was never expected"
+	| start choice a b c join after flow instance |
+	start := FBStartEvent new.
+	choice := start addOutgoingNode: (FBMultiChoiceGateway named: 'choice').
+	a := FBExternalWait new condition: [ :each | false ]; yourself.
+	b := (FBPluggableTask named: 'b') block: [ :act | act value: 2 ].
+	c := FBTask named: 'c'.
+	join := FBOrJoin named: 'join'.
+	choice --> (a when: [ :x | x > 0 ]) --> join.
+	choice --> (b when: [ :x | x > 0 ]) --> join.
+	choice --> (c when: [ :x | x > 100 ]) --> join.
+	after := join addOutgoingNode: ((FBPluggableTask named: 'after') block: [ :act | act value: act argument ]).
+	after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+	self assert: instance state equals: #waiting.
+	self assertConsistent: instance.
+
+	instance cancelStrand: instance openWaitingEntries first token.
+
+	instance execute.
+	self assert: instance state equals: #done.
+	self assert: (instance activationOfNode: after) argument keys asArray equals: { b }.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testAJoinReleasedFromAWithdrawalQueuesOnItsOwnExecutorNotOnTheFrameOnTop [
+	"the join stands in the root executor; when its last missing branch is taken back a
+	parallel scope of another strand is on top, waiting. The join's continuation belongs
+	to the root - it runs once the frame has popped - and must not land in the frame"
+	| start outer inner wait b innerJoin after fork iteration outerJoin flow instance root frame waitToken |
+	start := FBStartEvent new.
+	outer := start addOutgoingNode: (FBAndSplit named: 'outer').
+	"first branch: a split whose join will be released from the withdrawal"
+	inner := outer addOutgoingNode: (FBAndSplit named: 'inner').
+	wait := inner addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; name: 'wait'; yourself).
+	b := inner addOutgoingNode: ((FBPluggableTask named: 'b') block: [ :act | act value: 2 ]).
+	innerJoin := FBAndJoin named: 'inner join'.
+	wait --> innerJoin.
+	b --> innerJoin.
+	after := innerJoin addOutgoingNode: ((FBPluggableTask named: 'after') block: [ :act | act value: act argument ]).
+	"second branch: a parallel scope that waits in every iteration - two nodes later
+	than the first branch, so that the first branch's wait has parked and its sibling
+	has arrived at the join before the frame is pushed and takes the top (the root
+	queue is stepped in order, one activation per step)"
+	fork := ((outer addOutgoingNode: ((FBPluggableTask named: 'pre') block: [ :act | act value: act argument ]))
+		addOutgoingNode: ((FBPluggableTask named: 'pre 2') block: [ :act | act value: act argument ]))
+		addOutgoingNode: (FBParallelNode named: 'fork').
+	iteration := fork addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; name: 'iteration'; yourself).
+	outerJoin := FBAndJoin named: 'outer join'.
+	after --> outerJoin.
+	(iteration addOutgoingNode: (FBParallelJoinNode named: 'scope join')) --> outerJoin.
+	outerJoin addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	"one iteration: two waiting at the same transition would share its suspension, and
+	resuming one drops the other's address today - a separate matter"
+	instance executeWith: #( 1 ).
+	root := instance rootExecutor.
+	frame := instance executor.
+	self assert: (frame isKindOf: FBParallelExecutor).
+	self assert: instance state equals: #waiting.
+	self assert: instance openWaitingEntries size equals: 2.
+	self assertConsistent: instance.
+
+	waitToken := (instance openWaitingEntries detect: [ :each | each token node == wait ]) token.
+	instance cancelStrand: waitToken.
+
+	"queued where the join stands, behind the frame - the frame itself is untouched"
+	self assert: (root pending collect: [ :each | each transition target ]) asArray equals: { after }.
+	self assert: frame pending isEmpty.
+	self assert: instance executor identicalTo: frame.
+	self assert: instance state equals: #waiting.
+	self assertConsistent: instance.
+
+	"the iteration is resumed, the frame pops, and the root runs what the join queued"
+	self assert: (instance signal: instance openWaitingEntries first correlationId with: 7).
+	instance execute.
+	self assert: instance state equals: #done.
+	self assert: (instance activations select: [ :each | each node == after ]) size equals: 1.
+	self assert: (instance activations select: [ :each | each node == outerJoin ]) size equals: 2.
+	self assertConsistent: instance
+]

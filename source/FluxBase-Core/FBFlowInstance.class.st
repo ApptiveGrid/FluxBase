@@ -852,6 +852,10 @@ FBFlowInstance >> withdrawStrandsSatisfying: aBlock [
 	activation on one reads that off it, stays in the log, and gets an
 	FBNodeActivationCancelled.
 
+	Then the joins' side: a token taken that stood for a branch of a pass through a
+	split is a branch that will never arrive, the pass counts it, and a join that was
+	only waiting for it goes on with what did arrive (#accountCancelledBranchesOf:).
+
 	Then the executor on top of each instance is settled, innermost first: a parallel
 	scope whose queue emptied moves on or stops, a sub flow frame whose child is over
 	pops - things a step would have done and no step will do now. Settled even when
@@ -871,9 +875,62 @@ FBFlowInstance >> withdrawStrandsSatisfying: aBlock [
 		token cancelled.
 		token activation ifNotNil: [ :activation |
 			self addEvent: (FBNodeActivationCancelled new activation: activation) ] ].
+	self accountCancelledBranchesOf: taken.
 	self activeFlowInstances reverseDo: [ :each |
 		each executor ifNotNil: [ :top | top settleAfterWithdrawal ] ].
 	^ taken
+]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> accountCancelledBranchesOf: tokens [
+	"the joins' side of a withdrawal. Every token taken that was the front of a branch
+	of a pass through a split (FBToken>>isFrontOfItsPass) is a branch that will never
+	arrive at the join: the pass counts it (FBSplitExecution>>branchCancelled), and each
+	pass touched is settled once - a join of it that only waited for what fell goes on
+	now, and a pass with nothing left is gone for the enclosing one (#settlePass:).
+	The policy behind it: a branch taken back is a branch that does not come, the join
+	goes on with the rest; cancelling one branch of a split is not cancelling the split"
+	| passes |
+	passes := OrderedCollection new.
+	tokens do: [ :each |
+		each isFrontOfItsPass ifTrue: [
+			each split branchCancelled.
+			(passes includes: each split) ifFalse: [ passes add: each split ] ] ].
+	passes do: [ :each | self settlePass: each ]
+]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> settlePass: aPass [
+	"aPass lost a branch. A join state of it that can go on now (FBJoinState>>canRelease)
+	is released on the executor that ran its last arrival - where the join stands, not
+	whatever frame is on top of me at this moment; the join's outgoing are queued there
+	and run when that executor runs again. Within a step the next arrival would have
+	found the count, but none is coming for this. A join whose token lives in a
+	cancelled scope is left alone: nothing queues there, and its state falls with the
+	scope.
+
+	A pass with every branch taken back and no arrival releases nothing - its join never
+	ran, and the branch that led into the split is over for the enclosing pass as well:
+	that one counts it and is settled in turn, up to the outermost, where a strand that
+	vanished is just that. Join states are looked up along the chain: a pass lives in the
+	instance whose split ran it, which may be a sub flow of mine"
+	| states |
+	states := self activeFlowInstances flatCollect: [ :each | each joinStatesOf: aPass ].
+	states do: [ :each |
+		(each canRelease and: [ each lastArrival token isInCancelledScope not ])
+			ifTrue: [ each releaseOn: each lastArrival executor ] ].
+	(aPass isExhausted and: [ states allSatisfy: [ :each | each arrived isEmpty ] ]) ifTrue: [
+		aPass outer ifNotNil: [ :outer |
+			outer branchCancelled.
+			self settlePass: outer ] ]
+]
+
+{ #category : 'executing' }
+FBFlowInstance >> joinStatesOf: aPass [
+	"the join states my joins keep for aPass - one per join node the pass's branches
+	reached, none once the pass's scope or I ended"
+	joinStates ifNil: [ ^ #() ].
+	^ joinStates values select: [ :each | each split == aPass ]
 ]
 
 { #category : 'cancelling' }

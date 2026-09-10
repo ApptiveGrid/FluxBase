@@ -114,8 +114,18 @@ FBBaseActivation >> followAllOutgoingInSplit: aSplitExecution [
 	aSplitExecution: my own pass for an ordinary node (#followAllOutgoing), the
 	enclosing pass for a join, which closes the one its arrivals belonged to
 	(FBJoinBehavior>>execute)"
+	self followAllOutgoingInSplit: aSplitExecution on: executor flowInstance executor
+]
+
+{ #category : 'as yet unclassified' }
+FBBaseActivation >> followAllOutgoingInSplit: aSplitExecution on: anExecutor [
+	"#followAllOutgoingInSplit:, queueing on anExecutor rather than on the executor on
+	top of my instance. Within a step the two are the same. A join released from a
+	withdrawal, outside any step, names the executor it stands in
+	(FBJoinState>>releaseOn:) - a frame of some other strand may be on top just then,
+	and work of mine does not belong in it"
 	(self node effectiveOutgoingFor: self) do: [ :transition |
-		self followTransition: transition withToken: (self childToken split: aSplitExecution; yourself) ]
+		self followTransition: transition withToken: (self childToken split: aSplitExecution; yourself) on: anExecutor ]
 ]
 
 { #category : 'as yet unclassified' }
@@ -133,10 +143,20 @@ FBBaseActivation >> followTransition: aTransition withToken: aToken [
 	activated immediately, taking the gateway's value as its own output instead of
 	waiting for the trigger. The check comes after #transitionMatches: so a branch
 	condition still decides first."
+	self followTransition: aTransition withToken: aToken on: executor flowInstance executor
+]
+
+{ #category : 'as yet unclassified' }
+FBBaseActivation >> followTransition: aTransition withToken: aToken on: anExecutor [
+	"#followTransition:withToken:, queueing on anExecutor - the executor on top of my
+	instance within a step, which is where a frame my node just pushed or a frame
+	that just popped leaves the work; the executor a join stands in when it is released
+	from a withdrawal (#followAllOutgoingInSplit:on:). A parked transition is parked on
+	my own executor either way (#waitForNode:withToken:)"
 	(self transitionMatches: aTransition) ifFalse: [ ^ self ].
 	aTransition target requiresTrigger ifTrue: [
 		^ self waitForNode: aTransition withToken: aToken ].
-	executor flowInstance executor addPending: aTransition withToken: aToken
+	anExecutor addPending: aTransition withToken: aToken
 ]
 
 { #category : 'testing' }
