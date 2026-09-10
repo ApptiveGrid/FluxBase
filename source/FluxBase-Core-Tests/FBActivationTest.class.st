@@ -42,40 +42,6 @@ FBActivationTest >> testSourceNodeAnswersTheNodeTheActivationArrivedFrom [
 	self assert: arrivals asSet equals: (Set with: a with: b)
 ]
 
-{ #category : 'as yet unclassified' }
-FBActivationTest >> testSourceNodeFallsBackToTheLegacyParentIdWhenThereIsNoParentReference [
-	"Tokens persisted before FBToken>>parent became a real reference carry only the
-	parent's id. Rebuild that state directly - the setters for it are gone on purpose -
-	and check the old resolution path still answers the same node. Delete this together
-	with FBToken>>parentId once no such tokens are left in any store."
-	| start split a b join end flow instance arrival parentToken |
-	start := FBStartEvent new.
-	split := FBAndSplit named: 'split'.
-	a := FBTask named: 'a'.
-	b := FBTask named: 'b'.
-	join := FBAndJoin named: 'join'.
-	end := FBEndEvent new.
-	start --> split.
-	split --> a --> join.
-	split --> b --> join.
-	join --> end.
-	flow := FBFlow new start: start.
-	instance := flow newInstance.
-	instance execute.
-	arrival := (instance activations detect: [ :each | each node == join ]).
-	parentToken := arrival token parent.
-	arrival token
-		instVarNamed: 'parent' put: nil;
-		instVarNamed: 'parentId' put: parentToken id.
-	self assert: arrival token parent isNil.
-	self assert: arrival sourceNode equals: parentToken node
-]
-
-{ #category : 'as yet unclassified' }
-FBActivationTest >> testSourceNodeIsNilWhenThereIsNeitherAParentNorALegacyId [
-	self assert: FBActivation new sourceNode isNil
-]
-
 { #category : 'tests' }
 FBActivationTest >> testEnvironment [
 	| activation node |
@@ -154,4 +120,9 @@ FBActivationTest >> testFinishedActivationPersistedWithoutATokenDoesNotReportIts
 	activation done.
 	self assert: activation state equals: #done.
 	self assert: activation token state equals: #ready
+]
+
+{ #category : 'as yet unclassified' }
+FBActivationTest >> testSourceNodeIsNilWithoutAParentToken [
+	self assert: FBActivation new sourceNode isNil
 ]

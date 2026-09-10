@@ -288,22 +288,6 @@ FBFlowInstanceTest >> testNextTransitionForTheStartPseudoTransition [
 ]
 
 { #category : 'tests' }
-FBFlowInstanceTest >> testNextTransitionToleratesRawTransitionPendingFromBeforeWorkItemMigration [
-	"an instance persisted before FBWorkItem existed can still have a raw FBTransition
-	sitting in pending after being loaded back into a newer image. #nextTransition
-	unwraps its queue entry, and FBTransition>>transition is what keeps that readable"
-	| flowInstance realTransition |
-	flowInstance := FBFlow simpleFlow newInstance.
-	flowInstance initializeExecutor.
-	realTransition := flowInstance start outgoing first.
-	flowInstance executor
-		instVarNamed: #pending
-		put: (OrderedCollection with: realTransition).
-	self assert: flowInstance nextTransition == realTransition.
-	self assert: flowInstance nextNode equals: realTransition target
-]
-
-{ #category : 'tests' }
 FBFlowInstanceTest >> testResumeWaitingAtContinuesTheFlow [
 	| flow instance waitNode |
 	flow := FBFlow simpleWaitFlow.

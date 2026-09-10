@@ -242,11 +242,8 @@ FBBaseExecutor >> tokenForSuspended: anObject satisfying: aBlock [
 	"the first token stored for anObject that aBlock accepts, left where it is - the one
 	#takeTokenForSuspended:satisfying: would take. For a look before the taking
 	(#resume:withToken:value:)"
-	| tokens |
 	suspendedTokens ifNil: [ ^ nil ].
-	tokens := suspendedTokens at: anObject ifAbsent: [ ^ nil ].
-	(tokens isKindOf: Collection) ifFalse: [ ^ (aBlock value: tokens) ifTrue: [ tokens ] ifFalse: [ nil ] ].
-	^ tokens detect: aBlock ifNone: [ nil ]
+	^ (suspendedTokens at: anObject ifAbsent: [ ^ nil ]) detect: aBlock ifNone: [ nil ]
 ]
 
 { #category : 'accessing' }
@@ -267,12 +264,6 @@ FBBaseExecutor >> takeTokenForSuspended: anObject satisfying: aBlock [
 	| tokens token |
 	suspendedTokens ifNil: [ ^ nil ].
 	tokens := suspendedTokens at: anObject ifAbsent: [ ^ nil ].
-	"executors persisted while one token was kept per suspended object hold that token
-	itself rather than a queue of them"
-	(tokens isKindOf: Collection) ifFalse: [
-		(aBlock value: tokens) ifFalse: [ ^ nil ].
-		suspendedTokens removeKey: anObject.
-		^ tokens ].
 	token := tokens detect: aBlock ifNone: [ ^ nil ].
 	tokens remove: token.
 	tokens ifEmpty: [ suspendedTokens removeKey: anObject ].
@@ -405,17 +396,40 @@ FBBaseExecutor >> suspendedExecutor: anObject [
 	suspendedExecutor := anObject
 ]
 
+{ #category : 'migrating' }
+FBBaseExecutor >> normalizeQueues [
+	"bring my queues from the shapes older stores wrote to the current one, and answer
+	whether anything changed: a raw FBTransition in #pending (from before FBWorkItem,
+	2026-09-03) becomes a work item without a token, and a single token under a
+	suspension in #suspendedTokens (from before one suspension could hold several) becomes
+	a queue of one. What FBFlowInstance>>normalizePersistedQueues asks of every executor
+	for ApptiveGrid's database migration; nothing else reads the old shapes any more"
+	| changed |
+	changed := false.
+	pending withIndexDo: [ :each :i |
+		(each isKindOf: FBWorkItem) ifFalse: [
+			pending at: i put: (FBWorkItem new transition: each; yourself).
+			changed := true ] ].
+	suspendedTokens ifNotNil: [
+		suspendedTokens keys do: [ :key |
+			| tokens |
+			tokens := suspendedTokens at: key.
+			(tokens isKindOf: Collection) ifFalse: [
+				suspendedTokens at: key put: (OrderedCollection with: tokens).
+				changed := true ] ] ].
+	^ changed
+]
+
 { #category : 'testing' }
 FBBaseExecutor >> hasTokenIn: aScope [
 	"is a token of aScope, or of a scope nested in it, still with me - queued on a work
 	item or parked for a suspension? What FBFlowInstance>>isScopeLive: asks every active
-	executor. A pending entry from before FBWorkItem existed carries no token"
-	(pending anySatisfy: [ :each | aScope encloses: each token scope ]) ifTrue: [ ^ true ].
+	executor. A work item queued without a token (a rerun, a normalized old entry)
+	belongs to no scope"
+	(pending anySatisfy: [ :each | each token notNil and: [ aScope encloses: each token scope ] ]) ifTrue: [ ^ true ].
 	suspendedTokens ifNil: [ ^ false ].
 	^ suspendedTokens values anySatisfy: [ :tokens |
-		(tokens isKindOf: Collection)
-			ifTrue: [ tokens anySatisfy: [ :token | aScope encloses: token scope ] ]
-			ifFalse: [ aScope encloses: tokens scope ] ]
+		tokens anySatisfy: [ :token | aScope encloses: token scope ] ]
 ]
 
 { #category : 'cancelling' }
@@ -424,10 +438,10 @@ FBBaseExecutor >> withdrawTokensSatisfying: aBlock [
 	tokens taken: work items off #pending, and tokens off the queues in #suspendedTokens
 	- a suspension whose last token went falls out of #suspended with it, once per
 	token taken, since #suspended holds the same object once per parked strand. A
-	suspension that recorded no token (parked before tokens were kept), and a pending
-	entry from before work items existed, are never touched. The one place the queues
-	are emptied from outside a step; FBFlowInstance>>withdrawStrandsSatisfying: asks it
-	of every active executor and settles me afterwards"
+	suspension that recorded no token (parked before tokens were kept), and a work item
+	queued without one, are never touched. The one place the queues are emptied from
+	outside a step; FBFlowInstance>>withdrawStrandsSatisfying: asks it of every active
+	executor and settles me afterwards"
 
 	| taken |
 	taken := OrderedCollection new.
@@ -438,20 +452,12 @@ FBBaseExecutor >> withdrawTokensSatisfying: aBlock [
 	suspendedTokens keys do: [ :suspension |
 		| queue |
 		queue := suspendedTokens at: suspension.
-		(queue isKindOf: Collection)
-			ifTrue: [
-				(queue select: aBlock) do: [ :token |
-					queue remove: token.
-					suspended remove: suspension ifAbsent: [ ].
-					suspension strandWithdrawn: token.
-					taken add: token ].
-				queue ifEmpty: [ suspendedTokens removeKey: suspension ] ]
-			ifFalse: [
-				(aBlock value: queue) ifTrue: [
-					suspendedTokens removeKey: suspension.
-					suspended remove: suspension ifAbsent: [ ].
-					suspension strandWithdrawn: queue.
-					taken add: queue ] ] ].
+		(queue select: aBlock) do: [ :token |
+			queue remove: token.
+			suspended remove: suspension ifAbsent: [ ].
+			suspension strandWithdrawn: token.
+			taken add: token ].
+		queue ifEmpty: [ suspendedTokens removeKey: suspension ] ].
 	^ taken
 ]
 

@@ -11,10 +11,8 @@ FBJoinBehavior >> arrivalKey [
 	"the branch an arrival came through. The parent token identifies it, the source
 	node does not: two branches of one split can reach the join through the same
 	predecessor - one directly, the other after a detour - and would then collapse
-	onto a single #arrived entry, so the join would never see all its branches.
-	Tokens persisted before FBToken held a real #parent fall back to the node, which
-	is what this used to key by all along."
-	^ activation token parent ifNil: [ activation sourceNode ]
+	onto a single #arrived entry, so the join would never see all its branches"
+	^ activation token parent
 ]
 
 { #category : 'as yet unclassified' }

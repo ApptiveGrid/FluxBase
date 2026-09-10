@@ -116,7 +116,7 @@ FBScope >> initialize [
 { #category : 'accessing' }
 FBScope >> outer [
 	"The scope I am nested in, or nil if I am a root. Nesting, not sequence -
-	FBToken>>parentId is a different relation, see my class comment."
+	FBToken>>parent is a different relation, see my class comment."
 	^ outer
 ]
 
