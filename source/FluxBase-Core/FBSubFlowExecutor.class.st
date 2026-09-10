@@ -68,7 +68,7 @@ FBSubFlowExecutor >> finish [
     block so that it lands on the caller's executor instead of on this frame -
     see the comment in FBBaseExecutor>>popThenResume:"
     | isError resultName matchedTransition |
-    isError := childInstance state = #error.
+    isError := childInstance hasErrors.
     resultName := isError ifTrue: [ #error ] ifFalse: [ #success ].
     matchedTransition := callerActivation node outgoing
                              detect: [ :each | each resultName = resultName ]
@@ -116,8 +116,9 @@ FBSubFlowExecutor >> isSubFlow [
 FBSubFlowExecutor >> isWaiting [
     "a node suspended anywhere inside the sub flow has to surface as the calling
     instance waiting, otherwise FBFlowInstance>>state reports #running for an
-    instance that nothing will ever advance"
-    ^ childInstance state = #waiting
+    instance that nothing will ever advance. Asked of the child through its own
+    definition of waiting, not through its #state"
+    ^ childInstance isWaiting
 ]
 
 { #category : 'printing' }
@@ -134,7 +135,7 @@ FBSubFlowExecutor >> step [
     boundary still encloses one activation. when the child ends or errors we pop,
     when it suspends on a wait we stay on the stack with nothing pending"
     childInstance step.
-    (childInstance atEnd or: [ childInstance state = #error ]) ifTrue: [
+    (childInstance atEnd or: [ childInstance hasErrors ]) ifTrue: [
         self finish ]
 ]
 

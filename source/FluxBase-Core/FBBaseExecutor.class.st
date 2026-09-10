@@ -131,14 +131,6 @@ FBBaseExecutor >> flowInstance: aFBFlowInstance [
 ]
 
 { #category : 'testing' }
-FBBaseExecutor >> hasErrors [
-	"not an executor-local fact: #activations is the flow instance's collection, shared
-	by every executor of that instance, so this answers the same for all of them"
-
-	^ flowInstance hasErrors
-]
-
-{ #category : 'testing' }
 FBBaseExecutor >> hasPending [
 	^ pending notEmpty 
 ]
