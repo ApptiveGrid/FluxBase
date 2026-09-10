@@ -278,3 +278,12 @@ FBParallelExecutor >> closeFinishedIterations [
 		flowInstance scopeEnded: each.
 		openIterationScopes remove: each ]
 ]
+
+{ #category : 'testing' }
+FBParallelExecutor >> isDone [
+	"done only when I am at the end of my list, not whenever my queues happen to be
+	empty: between two iterations, and while a frame pushed by my body runs, nothing is
+	pending or suspended here although the loop is far from over. Without this the
+	inherited answer said #done in the middle of the loop"
+	^ self atEnd
+]

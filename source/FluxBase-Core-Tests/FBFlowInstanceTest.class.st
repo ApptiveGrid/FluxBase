@@ -76,10 +76,15 @@ FBFlowInstanceTest >> testTheRootScopeComesWithTheExecutorNotWithAReading [
 
 { #category : 'tests' }
 FBFlowInstanceTest >> testActivationsAreDone [
+	"every step of a run that went through reads #done afterwards. Used to compare with
+	#isDone, a symbol no activation ever answers, over an instance that had not run -
+	an empty collection satisfying anything"
 	| flowInstance |
 	flowInstance := FBFlow simpleFlow newInstance.
-	flowInstance initialValue: nil.
-	self assert: (flowInstance activations allSatisfy: [ :each | each state = #isDone ])
+	flowInstance executeWith: 7.
+	self assert: flowInstance state equals: #done.
+	self deny: flowInstance activations isEmpty.
+	self assert: (flowInstance activations allSatisfy: [ :each | each state = #done ])
 ]
 
 { #category : 'tests' }
@@ -98,7 +103,7 @@ FBFlowInstanceTest >> testCompleted [
 	flowInstance := FBFlow simpleFlow newInstance.
 	flowInstance initialValue: 7.
 	flowInstance execute.
-	self assert: flowInstance isDone.
+	self assert: flowInstance atEnd.
 	self assert: flowInstance atEnd equals: true
 ]
 
@@ -335,7 +340,7 @@ FBFlowInstanceTest >> testSimpleWaitCompletion [
 	instance := FBFlow simpleWaitFlow newInstance. 
 	instance initialValue: 3.
 	instance execute.
-	self assert: instance isDone
+	self assert: instance atEnd
 ]
 
 { #category : 'tests' }
@@ -344,7 +349,7 @@ FBFlowInstanceTest >> testSimpleWaitSuspension [
 	instance := FBFlow simpleWaitFlow newInstance. 
 	instance initialValue: 2.
 	instance execute.
-	self deny: instance isDone
+	self deny: instance atEnd
 ]
 
 { #category : 'tests' }
@@ -358,6 +363,124 @@ FBFlowInstanceTest >> testStepping [
 	flowInstance step.
 	self assert: flowInstance nextNode class equals: FBEndEvent.
 	flowInstance step.
-	self assert: flowInstance isDone.
+	self assert: flowInstance atEnd.
 	self assert: flowInstance atEnd equals: true
+]
+
+{ #category : 'private' }
+FBFlowInstanceTest >> assertStateInvariantsOf: anInstance [
+	"the promises FBFlowInstance>>state rests on, checked at one step boundary: the state
+	is one of five and never nil; #done means over and nothing failed; #waiting means
+	nothing can advance without an impulse; every executor on the stack that calls
+	itself done is at its end; and no open address is hidden before the end"
+	| state |
+	state := anInstance state.
+	self assert: (#( created running waiting done error ) includes: state) description: 'state ', state printString.
+	self assert: (state = #done) equals: (anInstance atEnd and: [ anInstance hasErrors not ]).
+	self assert: (state = #waiting) equals: anInstance isWaiting.
+	state = #waiting ifTrue: [ self deny: anInstance executor hasPending ].
+	anInstance activeExecutors do: [ :each |
+		self assert: (each isDone not or: [ each atEnd ]) description: each printString, ' is done but not at its end' ].
+	anInstance atEnd ifFalse: [
+		self assert: anInstance openWaitingEntries size
+			equals: (anInstance activeFlowInstances inject: 0 into: [ :sum :each | sum + each waitingRegistry entries size ]) ]
+]
+
+{ #category : 'private' }
+FBFlowInstanceTest >> runCheckingInvariants: anInstance [
+	"step anInstance as far as it goes, checking the state invariants at every boundary,
+	and answer the number of steps taken"
+	| steps |
+	steps := 0.
+	self assertStateInvariantsOf: anInstance.
+	[ anInstance executor hasPending ] whileTrue: [
+		anInstance step.
+		steps := steps + 1.
+		self assert: steps < 100.
+		self assertStateInvariantsOf: anInstance ].
+	^ steps
+]
+
+{ #category : 'tests' }
+FBFlowInstanceTest >> testStateInvariantsHoldAcrossAWaitAndItsResume [
+	| instance wait |
+	instance := FBFlow simpleWaitFlow newInstance.
+	instance initialValue: 2.
+	self runCheckingInvariants: instance.
+	self assert: instance state equals: #waiting.
+	wait := instance suspended first.
+	instance resumeWaitingAt: wait with: 7.
+	self assertStateInvariantsOf: instance.
+	self runCheckingInvariants: instance.
+	self assert: instance state equals: #done
+]
+
+{ #category : 'tests' }
+FBFlowInstanceTest >> testStateInvariantsHoldAcrossAParallelScopeWithAJoin [
+	| start fork split a b join after end flow instance |
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	split := fork addOutgoingNode: (FBAndSplit named: 'split').
+	a := (FBPluggableTask named: 'a') block: [ :act | act value: act argument + 1 ].
+	b := (FBPluggableTask named: 'b') block: [ :act | act value: act argument * 10 ].
+	join := FBAndJoin named: 'join'.
+	after := (FBPluggableTask named: 'after') block: [ :act | act value: act argument ].
+	split --> a --> join.
+	split --> b --> join.
+	join --> after.
+	end := (after addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance initialValue: #( 10 20 ).
+	self runCheckingInvariants: instance.
+	self assert: instance state equals: #done
+]
+
+{ #category : 'tests' }
+FBFlowInstanceTest >> testStateInvariantsHoldAcrossASubFlowInsideAParallelScope [
+	"the case that caught FBParallelExecutor>>isDone answering #done in the middle of its
+	loop: while the sub flow frame pushed by an iteration runs, the parallel executor
+	below it has nothing pending and nothing suspended, and is anything but done"
+	| childStart childFlow start fork subNode flow instance |
+	childStart := FBStartEvent new.
+	(childStart addOutgoingNode: ((FBPluggableTask named: 'work') block: [ :act | act value: act argument ]))
+		addOutgoingNode: FBEndEvent new.
+	childFlow := FBFlow new start: childStart.
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	subNode := fork addOutgoingNode: FBSubFlowNode new.
+	subNode subFlow: childFlow.
+	(subNode addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance initialValue: #( 1 2 3 ).
+	self runCheckingInvariants: instance.
+	self assert: instance state equals: #done.
+	self assert: instance subFlowInstances size equals: 3
+]
+
+{ #category : 'tests' }
+FBFlowInstanceTest >> testStateInvariantsHoldAcrossAWaitInsideASubFlow [
+	| childStart childFlow start subNode flow instance wait |
+	childStart := FBStartEvent new.
+	(childStart addOutgoingNode: (FBPluggableWait new condition: [ :each | false ]; yourself))
+		addOutgoingNode: FBEndEvent new.
+	childFlow := FBFlow new start: childStart.
+	start := FBStartEvent new.
+	subNode := start addOutgoingNode: FBSubFlowNode new.
+	subNode subFlow: childFlow.
+	subNode addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance initialValue: 1.
+	self runCheckingInvariants: instance.
+	self assert: instance state equals: #waiting.
+	self assert: instance isWaiting.
+	wait := instance suspended first.
+	instance resumeWaitingAt: wait with: 7.
+	self assertStateInvariantsOf: instance.
+	self runCheckingInvariants: instance.
+	self assert: instance state equals: #done
 ]

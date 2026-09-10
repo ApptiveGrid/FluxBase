@@ -147,11 +147,14 @@ FBFlowInstance >> announcer [
 	^ announcer
 ]
 
-{ #category : 'accessing' }
+{ #category : 'testing' }
 FBFlowInstance >> atEnd [
-	^ (executor = self rootExecutor) and: [
-		self executors allSatisfy: [ :each | each atEnd ]
-		].
+	"am I over? The one definition: my root executor is back on top and has nothing
+	pending and nothing suspended. While a scope or a sub flow frame lies on top I am
+	not over, whatever the root's own queues look like - and once the root is on top,
+	the stack is the root alone. #state answers #done off this (or #error, when a step
+	failed on the way); #activateProtected: notices the moment it turns true"
+	^ self isRootExecutor and: [ executor atEnd ]
 ]
 
 { #category : 'finalization' }
@@ -370,11 +373,6 @@ FBFlowInstance >> innermostWaitingExecutor [
 ]
 
 { #category : 'testing' }
-FBFlowInstance >> isDone [
-	^ executor isDone
-]
-
-{ #category : 'testing' }
 FBFlowInstance >> isRootExecutor [
 
 	^ self rootExecutor = self executor
@@ -478,7 +476,7 @@ FBFlowInstance >> openWaitingEntries [
 	that still hold one: an instance persisted as finished before there was an end moment,
 	and an instance that stopped in error - it keeps its addresses for inspection, but a
 	reservation for a node it will never reach is not an open waiting spot"
-	(executor notNil and: [ self isDone ]) ifTrue: [ ^ #() ].
+	(executor notNil and: [ self atEnd ]) ifTrue: [ ^ #() ].
 	^ self activeFlowInstances flatCollect: [ :each | each waitingRegistry entries ]
 ]
 
@@ -672,13 +670,32 @@ FBFlowInstance >> start [
 
 { #category : 'accessing' }
 FBFlowInstance >> state [
+	"one of #created #running #waiting #done #error, never nil - derived, in this order,
+	from the two definitions that matter: #isWaiting and #atEnd. An instance is #created
+	while its root still holds nothing but the start; it is in #error as soon as any step
+	failed, whatever else is going on; it is #waiting when nothing can advance without an
+	impulse from outside; it is #done when it is over; and it is #running in between.
+	#cancelled joins this list once cancellation exists, read off the root scope"
 
-	(executor isNil or: [self rootExecutor isCreated]) ifTrue: [ ^ #created ].
+	(executor isNil or: [ self rootExecutor isCreated ]) ifTrue: [ ^ #created ].
 	self hasErrors ifTrue: [ ^ #error ].
-	(self executors anySatisfy:[:each | each isWaiting])  ifTrue: [ ^ #waiting ].
-	(self executors allSatisfy:[:each | each isDone]) ifTrue: [ ^ #done ].
-	(self isRootExecutor not or: [self rootExecutor isRunning]) ifTrue: [ ^ #running ].
+	self isWaiting ifTrue: [ ^ #waiting ].
+	self atEnd ifTrue: [ ^ #done ].
+	^ #running
+]
 
+{ #category : 'testing' }
+FBFlowInstance >> isWaiting [
+	"can nothing advance me without an impulse from outside? The one definition: the
+	executor on top - the only one a step ever advances - has nothing pending, and
+	something is suspended in me or in an instance executing inside me. Work queued on
+	an executor lower in the stack does not count: it is behind the frame on top and
+	comes to run only when that frame is popped, so it advances nothing now. A sub flow
+	frame answers #hasPending for its child's executor, so a wait inside a sub flow is a
+	wait of mine this way, without FBSubFlowExecutor asking the child's #state and
+	recursing"
+	executor hasPending ifTrue: [ ^ false ].
+	^ self suspended notEmpty
 ]
 
 { #category : 'executing' }
