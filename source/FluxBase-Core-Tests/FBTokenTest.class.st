@@ -48,17 +48,6 @@ FBTokenTest >> testTokenKnowsTheActivationItIsAttachedTo [
 ]
 
 { #category : 'as yet unclassified' }
-FBTokenTest >> testLegacyParentIdReadsThroughToTheParentReference [
-	"#parentId only exists for tokens persisted before #parent was a real reference.
-	For a token that has a parent it must not contradict it."
-	| parent child |
-	parent := FBToken new.
-	child := FBToken new parent: parent; yourself.
-	self assert: child parentId equals: parent id.
-	self assert: FBToken new parentId isNil
-]
-
-{ #category : 'as yet unclassified' }
 FBTokenTest >> testNewTokenHasReadyStateAndUniqueId [
 	| a b |
 	a := FBToken new.

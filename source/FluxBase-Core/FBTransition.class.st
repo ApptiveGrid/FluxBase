@@ -159,23 +159,6 @@ FBTransition >> target: aFBNode [
 	target := aFBNode
 ]
 
-{ #category : 'accessing' }
-FBTransition >> transition [
-	"duck-types as an FBWorkItem so callers of pending/isCreated stay usable on a
-	pending queue persisted before FBWorkItem was introduced, which still holds raw
-	transitions. Every executor queues work items now, so this is only that
-	backwards path"
-	^ self
-]
-
-{ #category : 'accessing' }
-FBTransition >> token [
-	"the other half of duck-typing as an FBWorkItem (see #transition): a pending entry
-	persisted before work items existed is a raw transition, and it was queued without a
-	token"
-	^ nil
-]
-
 { #category : 'cancelling' }
 FBTransition >> strandWithdrawn: aToken [
 	"the strand parked on me - aToken - was taken back. The step that parked it was my

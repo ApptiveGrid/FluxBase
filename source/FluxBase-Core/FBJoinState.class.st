@@ -169,16 +169,7 @@ FBJoinState >> output [
 	both. A branch taken back is not in here: the join goes on with what arrived"
 	| output |
 	output := Dictionary new.
-	arrived keysAndValuesDo: [ :key :value |
-		output at: (self sourceNodeOf: key) put: value ].
+	arrived keysAndValuesDo: [ :key :value | output at: key node put: value ].
 	^ output
 ]
 
-{ #category : 'private' }
-FBJoinState >> sourceNodeOf: anArrivalKey [
-	"FBJoinBehavior>>arrivalKey answers a token, or the node itself for tokens
-	persisted without a real #parent"
-	^ (anArrivalKey isKindOf: FBToken)
-		ifTrue: [ anArrivalKey node ]
-		ifFalse: [ anArrivalKey ]
-]

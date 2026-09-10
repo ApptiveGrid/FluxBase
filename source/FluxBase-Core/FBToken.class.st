@@ -38,11 +38,11 @@ reference. That is also why #node is derived from #activation instead of being
 stored: a token that knows its activation knows its node, and a stored copy could
 only drift out of step with it.
 
-Three legacy fields, #parentId, #scopeId and #splitId, remain readable for tokens
-persisted before this: for those #parent is nil and FBBaseActivation>>sourceNode falls
-back to resolving the old id, and #splitId answers the stored id where there is no
-#split to derive it from. Nothing writes them any more, and they can be dropped once
-no such tokens are left in any store.
+The id fields that stood in for #parent, #scope and #split before they were references
+are gone (2026-09-10). A token persisted before then carries nil there and is treated
+as one without a parent, a scope or a pass; ApptiveGrid brings its stores to the current
+shape with a database migration (FBFlowInstance>>normalizePersistedQueues covers the
+executor side).
 
 My #state says whether this strand is running or parked: #ready or #waiting - and #ready
 again once the wait was resumed (#resumed) - or #cancelled, once the strand was taken
@@ -65,10 +65,7 @@ Class {
 		'scope',
 		'parent',
 		'split',
-		'splitId',
-		'state',
-		'parentId',
-		'scopeId'
+		'state'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -100,9 +97,9 @@ FBToken >> hasAncestor: aToken [
 	Not reflexive: a token is not its own ancestor. A waiting spot always carries a child
 	of the token that reserved an address for it, never that token itself.
 
-	By identity, and only along real #parent references - a token persisted before
-	#parent became a reference carries just #parentId and stops the walk. Those are from
-	before reservations existed, so none of them is an anchor"
+	By identity, and only along real #parent references - a token from before #parent
+	was a reference has none and stops the walk. Those are from before reservations
+	existed, so none of them is an anchor"
 
 	| each |
 	each := parent.
@@ -162,21 +159,6 @@ FBToken >> parent: aFBToken [
 	parent := aFBToken
 ]
 
-{ #category : 'legacy' }
-FBToken >> parentId [
-	"Only for tokens persisted before #parent became a real reference; nothing writes
-	this any more. Answers #parent's id when there is one, so a reader sees a
-	consistent value either way. See my class comment."
-	^ parent ifNil: [ parentId ] ifNotNil: [ :each | each id ]
-]
-
-{ #category : 'legacy' }
-FBToken >> scopeId [
-	"Only for tokens persisted before #scope became a real reference; nothing writes
-	this any more. See my class comment."
-	^ scope ifNil: [ scopeId ] ifNotNil: [ :each | each id ]
-]
-
 { #category : 'accessing' }
 FBToken >> resumed [
 	"the wait I was parked at is over and my strand goes on - back to #ready. Sent by
@@ -210,9 +192,9 @@ FBToken >> split: aSplitExecution [
 
 { #category : 'accessing' }
 FBToken >> splitId [
-	"the id of my split, for the outside (FBNodeActivationEvent>>splitId) - off the
-	split itself, or the stored id for a token persisted before splits were objects"
-	^ split ifNotNil: [ :each | each id ] ifNil: [ splitId ]
+	"the id of my pass, for the outside (FBNodeActivationEvent>>splitId); nil at the
+	outermost level"
+	^ split ifNotNil: [ :each | each id ]
 ]
 
 { #category : 'testing' }

@@ -161,27 +161,6 @@ FBParallelExecutorTest >> testEverySuspensionOfOneTransitionKeepsItsOwnToken [
 	self assert: tokens asSet size equals: 2
 ]
 
-{ #category : 'as yet unclassified' }
-FBParallelExecutorTest >> testTokenOfAnExecutorPersistedWithASingleTokenPerSuspensionIsStillFound [
-	"executors persisted while FBBaseExecutor>>addWaiting:withToken: kept one token per
-	suspended object hold that token itself where a queue of them is now expected, so
-	the reader has to tolerate both shapes - reaching into the ivar is the only way to
-	produce the old one"
-	| executor node token |
-	executor := FBParallelExecutor new
-		flowInstance: FBFlow simpleFlow newInstance;
-		node: (FBParallelNode named: 'p');
-		yourself.
-	node := FBTask named: 'waiting'.
-	token := FBToken new.
-	executor instVarNamed: 'suspendedTokens' put: (IdentityDictionary new
-		at: node put: token;
-		yourself).
-	self assert: (executor takeTokenForSuspended: node) == token.
-	"and it is forgotten, exactly as a token taken out of a queue is"
-	self assert: (executor takeTokenForSuspended: node) isNil
-]
-
 { #category : 'tests' }
 FBParallelExecutorTest >> testEachIterationRunsInItsOwnScope [
 	"an iteration is a lifetime: its tokens live in a scope of their own, opened per

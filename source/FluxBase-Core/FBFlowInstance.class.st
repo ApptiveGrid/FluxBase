@@ -460,12 +460,28 @@ FBFlowInstance >> nextNode [
 	^ self nextTransition target
 ]
 
+{ #category : 'migrating' }
+FBFlowInstance >> normalizePersistedQueues [
+	"bring the queues of every executor of mine, and of the sub flow instances I hold,
+	from the shapes older stores wrote to the current one (FBBaseExecutor>>
+	normalizeQueues): a raw transition in #pending becomes a work item, a single token
+	under a suspension becomes a queue of one. Answers whether anything changed, so
+	that a migration marks only what it touched. What ApptiveGrid's database migration
+	runs over every instance once; the engine itself no longer reads the old shapes"
+	| changed |
+	changed := false.
+	executor ifNotNil: [
+		self executors do: [ :each | each normalizeQueues ifTrue: [ changed := true ] ] ].
+	subFlowInstances ifNotNil: [ :children |
+		children do: [ :each | each normalizePersistedQueues ifTrue: [ changed := true ] ] ].
+	^ changed
+]
+
 { #category : 'accessing' }
 FBFlowInstance >> nextTransition [
 	"the transition the next step will follow. #firstPending answers the queued work
 	item that holds it, so unwrap it here - a work item is not a transition and must
-	not pass as one. An entry read back out of a store written before FBWorkItem
-	existed is a raw FBTransition and answers itself (FBTransition>>transition)"
+	not pass as one"
 
 	^ executor firstPending transition
 ]

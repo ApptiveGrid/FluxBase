@@ -255,22 +255,7 @@ FBBaseActivation >> sourceNode [
 	taken to produce me. Not derivable from the graph - my node may have several
 	incoming transitions, and a loop passes the same one repeatedly - so it comes from
 	my token's parent, which is the token of the activation that spawned me."
-	^ self token parent
-		ifNotNil: [ :parentToken | parentToken node ]
-		ifNil: [ self legacySourceNode ]
-]
-
-{ #category : 'accessing' }
-FBBaseActivation >> legacySourceNode [
-	"Tokens persisted before FBToken held a real #parent reference only carry the
-	parent's id, so resolve it the way FBJoinBehavior used to: search this instance's
-	activations for the one owning that token. Remove together with FBToken>>parentId
-	once no such tokens are left in any store."
-	| parentTokenId |
-	parentTokenId := self token parentId ifNil: [ ^ nil ].
-	^ (self instance activations
-		detect: [ :each | each token id = parentTokenId ]
-		ifNone: [ nil ]) ifNotNil: [ :each | each node ]
+	^ self token parent ifNotNil: [ :parentToken | parentToken node ]
 ]
 
 { #category : 'as yet unclassified' }
