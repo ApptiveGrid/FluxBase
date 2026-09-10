@@ -390,16 +390,24 @@ FBParallelExecutor >> shouldFollowTransition: transition with: value [
 
 { #category : 'services' }
 FBParallelExecutor >> step [
-	| workItem transition lastValue |
-	workItem := pending removeFirst.
+	| workItem transition lastValue followed |
+	workItem := pending first.
 	transition := workItem transition.
 	"the iteration this step belongs to, read off the work item's token: a body seed
 	(no token yet, see #scopeToken) is the newest iteration's, everything else carries
 	the token of the iteration that queued it"
 	current := workItem token ifNil: [ index ] ifNotNil: [ :token | self iterationOf: token ].
 	lastValue := transition source lastValueIn: self.
-
-	(self shouldFollowTransition: transition with: lastValue) ifTrue: [
+	followed := self shouldFollowTransition: transition with: lastValue.
+	"the same two things FBFlowExecutor>>step does around a transition: the instance is
+	asked before it is taken - ApptiveBase counts its rate limits there, and a refusal
+	raised from the hook leaves the work item queued, as it does in the root executor -
+	and the transition is recorded. Only for a transition actually followed: inside a
+	scope the branch condition is decided here, not at queueing time"
+	followed ifTrue: [ flowInstance aboutToTransition: transition ].
+	pending removeFirst.
+	followed ifTrue: [
+		flowInstance addEvent: (FBTransitionFollowed new transition: transition; value: lastValue).
 		self
 			activateTransition: transition
 			with: lastValue
