@@ -1074,9 +1074,11 @@ FBFlowInstance >> cancel [
 	waits in me, and end - regardless of steps that failed before, an abort is a
 	decision. I read #cancelled from then on; a late signal or a second cancel is
 	silent. An instance that has not run yet gets its root scope for this - it has
-	been cancelled before it started, and says so"
+	been cancelled before it started, and says so. An instance that is over already -
+	done, or cancelled before - is left as it is: cancelling a finished case is
+	nothing, and it must not turn a #done into a #cancelled after the fact"
 
-	self isCancelled ifTrue: [ ^ #() ].
+	self hasEnded ifTrue: [ ^ #() ].
 	self ensureScope.
 	^ [ self cancelScope: scope ] ensure: [
 		(executor isNil or: [ self atEnd ]) ifTrue: [ self ended ] ]

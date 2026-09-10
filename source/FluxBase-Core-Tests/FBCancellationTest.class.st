@@ -983,3 +983,22 @@ FBCancellationTest >> testCancellingTheRemainingIterationsTakesAWaitingSubFlowWi
 	self assert: seen asArray equals: { #( nil nil ) }.
 	self assertConsistent: instance
 ]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingAFinishedInstanceIsNothing [
+	"a finished case is not cancelled after the fact: no trace, and it stays #done"
+	| flow instance before |
+	flow := self flowSplittingIntoTwoEnds.
+	instance := flow newInstance.
+	instance executeWith: 1.
+	self assert: instance state equals: #done.
+	self assert: instance hasEnded.
+	before := instance events size.
+
+	self assert: (instance cancel) isEmpty.
+
+	self assert: instance state equals: #done.
+	self deny: instance isCancelled.
+	self assert: instance events size equals: before.
+	self assertConsistent: instance
+]
