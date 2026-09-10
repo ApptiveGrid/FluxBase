@@ -53,15 +53,21 @@ FBBaseExecutor >> addPending: aTransition [
 	^ self addPending: aTransition withToken: nil
 ]
 
-{ #category : 'adding' }
+{ #category : 'accessing' }
 FBBaseExecutor >> addPending: aTransition withToken: aToken [
 	"a transition on its own is not enough to schedule work: the token carries the
 	branch identity a join reads later (see FBWorkItem and FBToken), so it has to
 	travel through the queue together with the transition rather than be recreated
 	at the far end. Every executor queues this way - #pending is the executor's own
 	bookkeeping, the token belongs to the flow instance's execution, and queueing is
-	the one place the two meet"
+	the one place the two meet.
 
+	A token whose scope was cancelled queues nothing: the strand is over
+	(FBScope>>isCancelled). This is what keeps a frame that pops after a cancellation,
+	or a step that was already running, from starting work in a scope that is gone -
+	the token is marked so the activation it came from reads #cancelled"
+
+	(aToken notNil and: [ aToken isInCancelledScope ]) ifTrue: [ ^ aToken cancelled ].
 	pending add: (FBWorkItem new
 			 transition: aTransition;
 			 token: aToken;

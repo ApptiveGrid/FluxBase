@@ -153,7 +153,10 @@ FBFlowInstance >> atEnd [
 	pending and nothing suspended. While a scope or a sub flow frame lies on top I am
 	not over, whatever the root's own queues look like - and once the root is on top,
 	the stack is the root alone. #state answers #done off this (or #error, when a step
-	failed on the way); #activateProtected: notices the moment it turns true"
+	failed on the way); #activateProtected: notices the moment it turns true. An
+	instance without an executor has not begun and is not over - unless it was
+	cancelled before it began, which #state reads off the root scope first"
+	executor ifNil: [ ^ false ].
 	^ self isRootExecutor and: [ executor atEnd ]
 ]
 
@@ -225,6 +228,7 @@ FBFlowInstance >> ended [
 	happens there any more - and reached again only if something runs me again, which
 	nothing does"
 
+	self hasEnded ifTrue: [ ^ self ].
 	joinStates := nil.
 	splitBranchCounts := nil.
 	waitingRegistry := nil.
@@ -670,18 +674,28 @@ FBFlowInstance >> start [
 
 { #category : 'accessing' }
 FBFlowInstance >> state [
-	"one of #created #running #waiting #done #error, never nil - derived, in this order,
-	from the two definitions that matter: #isWaiting and #atEnd. An instance is #created
-	while its root still holds nothing but the start; it is in #error as soon as any step
-	failed, whatever else is going on; it is #waiting when nothing can advance without an
-	impulse from outside; it is #done when it is over; and it is #running in between.
-	#cancelled joins this list once cancellation exists, read off the root scope"
+	"one of #cancelled #created #running #waiting #done #error, never nil - derived, in
+	this order, from what matters: the root scope's fate, and the two definitions
+	#isWaiting and #atEnd. An instance whose root scope was cancelled is #cancelled,
+	whatever else it was - an abort is a decision, and it wins over an error that stood
+	before it; it is #created while its root still holds nothing but the start; in
+	#error as soon as any step failed; #waiting when nothing can advance without an
+	impulse from outside; #done when it is over; and #running in between. A terminated
+	instance (FBTerminateEvent) is #done: a modelled end, not a cancellation"
 
+	self isCancelled ifTrue: [ ^ #cancelled ].
 	(executor isNil or: [ self rootExecutor isCreated ]) ifTrue: [ ^ #created ].
 	self hasErrors ifTrue: [ ^ #error ].
 	self isWaiting ifTrue: [ ^ #waiting ].
 	self atEnd ifTrue: [ ^ #done ].
 	^ #running
+]
+
+{ #category : 'testing' }
+FBFlowInstance >> isCancelled [
+	"was my root scope cancelled - directly, or through the scope it is nested in, for a
+	sub flow instance whose caller's scope fell?"
+	^ scope notNil and: [ scope isCancelled ]
 ]
 
 { #category : 'testing' }
@@ -694,6 +708,7 @@ FBFlowInstance >> isWaiting [
 	frame answers #hasPending for its child's executor, so a wait inside a sub flow is a
 	wait of mine this way, without FBSubFlowExecutor asking the child's #state and
 	recursing"
+	executor ifNil: [ ^ false ].
 	executor hasPending ifTrue: [ ^ false ].
 	^ self suspended notEmpty
 ]
@@ -844,24 +859,38 @@ FBFlowInstance >> withdrawStrandsSatisfying: aBlock [
 	taken. Out of the executors' queues (FBBaseExecutor>>withdrawTokensSatisfying:) and
 	out of the registries: an address that stood on such a token falls, so a signal on
 	it is as silent as on a consumed one. Every token taken is #cancelled; a standing
-	activation on one reads that off it and stays in the log.
+	activation on one reads that off it, stays in the log, and gets an
+	FBNodeActivationCancelled.
 
 	Then the executor on top of each instance is settled, innermost first: a parallel
 	scope whose queue emptied moves on or stops, a sub flow frame whose child is over
-	pops - things a step would have done and no step will do now. And when that leaves
-	me over, I have ended the way any run ends"
+	pops - things a step would have done and no step will do now. Settled even when
+	nothing was taken: a parallel scope's first body seed carries no token yet
+	(FBParallelExecutor>>scopeToken) and is withdrawn by nothing here, and a loop whose
+	scope was just cancelled has to notice that on its own (FBParallelExecutor>>continue);
+	settling an executor nothing happened to changes nothing. Whether that leaves me
+	over is the caller's question: a cancelled strand ends me like any run
+	(#endIfOver), a cancelled case ends me regardless of errors (#cancel)"
 
 	| taken |
 	taken := OrderedCollection new.
 	self activeFlowInstances do: [ :each |
 		each executors do: [ :executor | taken addAll: (executor withdrawTokensSatisfying: aBlock) ].
 		each dropWaitingAddressesOnTokensSatisfying: aBlock ].
-	taken do: [ :token | token cancelled ].
-	taken ifEmpty: [ ^ taken ].
+	taken do: [ :token |
+		token cancelled.
+		token activation ifNotNil: [ :activation |
+			self addEvent: (FBNodeActivationCancelled new activation: activation) ] ].
 	self activeFlowInstances reverseDo: [ :each |
 		each executor ifNotNil: [ :top | top settleAfterWithdrawal ] ].
-	(self atEnd and: [ self hasErrors not ]) ifTrue: [ self ended ].
 	^ taken
+]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> endIfOver [
+	"end the way any run ends, if the last withdrawal left me over and nothing failed -
+	see #activateProtected:, which does the same after a step"
+	(self atEnd and: [ self hasErrors not ]) ifTrue: [ self ended ]
 ]
 
 { #category : 'cancelling' }
@@ -890,9 +919,67 @@ FBFlowInstance >> cancelStrand: aToken [
 	| taken |
 	taken := self withdrawStrandsSatisfying: [ :each | each == aToken or: [ each hasAncestor: aToken ] ].
 	taken ifEmpty: [ ^ taken ].
-	taken do: [ :token |
-		token activation ifNotNil: [ :activation |
-			self addEvent: (FBNodeActivationCancelled new activation: activation) ] ].
 	self addEvent: (FBStrandCancelled new token: aToken).
+	self endIfOver.
 	^ taken
+]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> cancelScope: aScope [
+	"cancel a region of me: aScope is marked, and from then on nothing runs or is taken
+	in there (FBScope>>isCancelled, enforced in FBBaseExecutor>>addPending:withToken: and
+	FBBaseActivation>>waitForNode:withToken:); then every strand living in it or in a
+	scope nested in it is taken back (#withdrawStrandsSatisfying:). For my root scope the
+	selection is everything in the chain, so that strands from before tokens carried a
+	scope fall too. One FBScopeCancelled records it. Answers the tokens taken; a scope
+	already cancelled, on its own or through its outer, answers empty and leaves no trace.
+
+	Cancel Region (WCP-25) on a region's scope and Cancel Multiple Instance Activity
+	(WCP-26) on iteration scopes are this; Cancel Case (WCP-20) is #cancel"
+
+	| taken |
+	aScope isCancelled ifTrue: [ ^ #() ].
+	aScope cancelled.
+	self addEvent: (FBScopeCancelled new scope: aScope).
+	taken := self withdrawStrandsSatisfying: (aScope == scope
+		ifTrue: [ [ :each | true ] ]
+		ifFalse: [ [ :each | aScope encloses: each scope ] ]).
+	aScope == scope ifFalse: [ self endIfOver ].
+	^ taken
+]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> cancel [
+	"Cancel Case (WCP-20): cancel my root scope, and with it everything that runs or
+	waits in me, and end - regardless of steps that failed before, an abort is a
+	decision. I read #cancelled from then on; a late signal or a second cancel is
+	silent. An instance that has not run yet gets its root scope for this - it has
+	been cancelled before it started, and says so"
+
+	self isCancelled ifTrue: [ ^ #() ].
+	self ensureScope.
+	^ [ self cancelScope: scope ] ensure: [
+		(executor isNil or: [ self atEnd ]) ifTrue: [ self ended ] ]
+]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> terminateExcept: aToken [
+	"Explicit Termination (WCP-43), from inside: take every strand back except the one
+	aToken is on - the one that reached the FBTerminateEvent and decided. The root
+	scope stays as it is and I end as #done, a modelled end; the caller's activation is
+	running inside #activateProtected:, which ends me once it is through, so nothing
+	ends me here. Recorded as an FBFlowInstanceTerminated"
+
+	| taken |
+	taken := self withdrawStrandsSatisfying: [ :each | each ~~ aToken ].
+	self addEvent: FBFlowInstanceTerminated new.
+	^ taken
+]
+
+{ #category : 'testing' }
+FBFlowInstance >> hasEnded [
+	"have I ended - the moment recorded once, see #ended? Read off the log rather than a
+	flag: a cancellation may end me from outside a step and a step may find me over
+	right after, and only one of them may record it"
+	^ events notNil and: [ events anySatisfy: [ :each | each isKindOf: FBFlowInstanceEnded ] ]
 ]

@@ -286,6 +286,10 @@ FBBaseActivation >> waitForNode: aSuspension withToken: aToken [
 	There used to be a one-argument #waitForNode: passing nil for the token. It lost its
 	last caller when the condition wait started handing over its own token, and is gone:
 	a path that parks without a token is a path that produces an entry with no #splitId."
+	(aToken notNil and: [ aToken isInCancelledScope ]) ifTrue: [
+		"nothing parks in a cancelled scope: the strand is over, see FBScope>>isCancelled"
+		aToken cancelled.
+		^ nil ].
 	self waiting.
 	executor addWaiting: aSuspension withToken: aToken.
 	aSuspension waitingNode isExternallyResumable ifFalse: [ ^ nil ].

@@ -14,9 +14,11 @@ Class {
 FBCancellationTest >> assertConsistent: anInstance [
 	| state |
 	state := anInstance state.
-	self assert: (#( created running waiting done error ) includes: state) description: 'state ', state printString.
-	self assert: (state = #done) equals: (anInstance atEnd and: [ anInstance hasErrors not ]).
-	self assert: (state = #waiting) equals: anInstance isWaiting.
+	self assert: (#( cancelled created running waiting done error ) includes: state) description: 'state ', state printString.
+	self assert: (state = #cancelled) equals: anInstance isCancelled.
+	self assert: (state = #done) equals: (anInstance atEnd and: [ anInstance hasErrors not and: [ anInstance isCancelled not ] ]).
+	self assert: (state = #waiting) equals: (anInstance isWaiting and: [ anInstance isCancelled not ]).
+	state = #waiting ifTrue: [ self deny: anInstance executor hasPending ].
 	anInstance activeExecutors do: [ :each |
 		self assert: (each isDone not or: [ each atEnd ]) description: each printString, ' is done but not at its end' ].
 	anInstance atEnd ifFalse: [
@@ -254,4 +256,214 @@ FBCancellationTest >> testCancellingTwiceIsCancellingOnce [
 	self assert: (instance cancelStrand: FBToken new) isEmpty.
 
 	self assert: (self cancelledEventsOf: instance) size equals: 1
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingTheCaseTakesEverythingAndEndsCancelled [
+	"Cancel Case: the root scope falls, every wait and address with it, the instance is
+	over, has ended, and reads #cancelled. A late signal is silent, and so is a second
+	cancel"
+	| instance address wait |
+	instance := self flowWaitingFromOutside newInstance.
+	instance executeWith: 1.
+	address := instance openWaitingEntries first.
+	wait := instance suspended first.
+
+	self assert: instance cancel size equals: 1.
+
+	self assert: instance state equals: #cancelled.
+	self assert: instance isCancelled.
+	self assert: instance scope isCancelled.
+	self assert: instance atEnd.
+	self assert: instance hasEnded.
+	self assert: instance suspended isEmpty.
+	self assert: instance openWaitingEntries isEmpty.
+	self assert: (instance activations detect: [ :each | each node == wait ]) state equals: #cancelled.
+	self assert: (instance events anySatisfy: [ :each | each isKindOf: FBScopeCancelled ]).
+	self assert: (instance events select: [ :each | each isKindOf: FBFlowInstanceEnded ]) size equals: 1.
+	self deny: (instance signal: address correlationId with: 7).
+	self assert: instance cancel isEmpty.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingTheCaseStopsAParallelLoopBeforeItsNextIteration [
+	"a loop with iterations still to come: after the cancel none of them starts, the
+	body never ran, and the parallel executor has popped"
+	| start fork body flow instance ran |
+	ran := 0.
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	body := (FBPluggableTask named: 'body') block: [ :act | ran := ran + 1. act value: act argument ].
+	fork --> body.
+	(body addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance initialValue: #( 1 2 3 ).
+	instance step. "start"
+	instance step. "fork - the first iteration is queued, the loop is on top"
+	self assert: (instance executor isKindOf: FBParallelExecutor).
+	self assert: instance executor pending notEmpty.
+
+	instance cancel.
+
+	self assert: ran equals: 0.
+	self assert: instance state equals: #cancelled.
+	self assert: instance isRootExecutor.
+	self assert: instance atEnd.
+	self assert: instance hasEnded.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingAnIterationScopeAloneLetsTheLoopGoOn [
+	"Cancel Multiple Instance Activity in the small: one iteration's scope falls, the
+	loop itself is untouched and completes once the other iteration is resumed"
+	| start fork wait flow instance first second |
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	wait := fork addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	(wait addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+	first := instance openWaitingEntries first.
+	second := instance openWaitingEntries second.
+	self deny: first token scope == second token scope.
+
+	self assert: (instance cancelScope: first token scope) size equals: 1.
+
+	self assert: first token scope isCancelled.
+	self deny: instance isCancelled.
+	self assert: instance state equals: #waiting.
+	self assert: instance openWaitingEntries asArray equals: { second }.
+	self assertConsistent: instance.
+	self assert: (instance signal: second correlationId with: 7).
+	instance execute.
+	self assert: instance state equals: #done.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingTheCaseWithAWaitingSubFlowCancelsTheChildAndPopsItsFrame [
+	"the child's root scope is nested in the caller's, so it reads #cancelled too; the
+	frame pops without failing the caller - nothing errored, a decision was made"
+	| instance child |
+	instance := (self flowCalling: self flowWaitingFromOutside) newInstance.
+	instance executeWith: 1.
+	child := instance subFlowInstances first.
+	self assert: instance state equals: #waiting.
+
+	instance cancel.
+
+	self assert: child isCancelled.
+	self assert: child state equals: #cancelled.
+	self assert: child suspended isEmpty.
+	self assert: instance state equals: #cancelled.
+	self assert: instance isRootExecutor.
+	self deny: instance hasErrors.
+	self deny: (instance events anySatisfy: [ :each | each isKindOf: FBNodeActivationErrored ]).
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testACancelledScopeTakesNoNewWorkAndParksNothing [
+	"the rule behind cancellation: a token whose scope was cancelled is neither queued
+	nor parked - it is marked cancelled and the strand ends there"
+	| instance token activation wait |
+	instance := FBFlow simpleFlow newInstance.
+	instance initializeExecutor.
+	instance scope cancelled.
+	token := FBToken new scope: instance scope; yourself.
+
+	instance executor addPending: instance flow start outgoing first withToken: token.
+	self assert: instance executor pending size equals: 1. "the start alone"
+	self assert: token isCancelled.
+
+	wait := FBPluggableWait new condition: [ :each | false ]; yourself.
+	activation := FBActivation new executor: instance executor; node: wait; yourself.
+	activation token: (FBToken new scope: instance scope; yourself).
+	self assert: (activation waitForNode: wait withToken: activation token) isNil.
+	self assert: instance executor suspended isEmpty.
+	self assert: activation state equals: #cancelled
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testATerminateNodeEndsTheInstanceDoneAndTakesTheOtherStrandBack [
+	"Explicit Termination: one branch reaches the terminate node while the other waits.
+	The waiting strand is taken back, the instance ends as #done - a modelled end - and
+	the terminating step itself reads #done"
+	| start split a terminate wait flow instance |
+	start := FBStartEvent new.
+	split := start addOutgoingNode: (FBAndSplit named: 'split').
+	a := (FBPluggableTask named: 'a') block: [ :act | act value: act argument ].
+	terminate := FBTerminateEvent new.
+	wait := FBExternalWait new condition: [ :each | false ]; yourself.
+	split --> a --> terminate.
+	split --> wait --> FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+
+	instance executeWith: 1.
+
+	self assert: instance state equals: #done.
+	self deny: instance isCancelled.
+	self assert: instance atEnd.
+	self assert: instance suspended isEmpty.
+	self assert: instance openWaitingEntries isEmpty.
+	self assert: (instance activations detect: [ :each | each node == terminate ]) state equals: #done.
+	self assert: (instance activations detect: [ :each | each node == wait ]) state equals: #cancelled.
+	self assert: (instance events anySatisfy: [ :each | each isKindOf: FBFlowInstanceTerminated ]).
+	self assert: (instance events select: [ :each | each isKindOf: FBFlowInstanceEnded ]) size equals: 1.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingAnErroredInstanceReadsCancelled [
+	"an abort is a decision and wins over an error that stood before it"
+	| instance |
+	instance := FBFlow simpleFlowWithError newInstance.
+	instance executeWith: 1.
+	self assert: instance state equals: #error.
+
+	instance cancel.
+
+	self assert: instance state equals: #cancelled.
+	self assert: instance hasErrors.
+	self assert: instance hasEnded.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingAnInstanceThatNeverRanEndsItCancelled [
+	| instance |
+	instance := self flowWaitingFromOutside newInstance.
+	self assert: instance state equals: #created.
+
+	instance cancel.
+
+	self assert: instance state equals: #cancelled.
+	self assert: instance hasEnded.
+	self assert: instance activations isEmpty.
+	self assertConsistent: instance
+]
+
+{ #category : 'tests' }
+FBCancellationTest >> testCancellingTheCaseTakesStrandsWithoutAScopeToo [
+	"an instance persisted before tokens carried a scope: its strands belong to no scope,
+	and a cancel by scope would miss them. The root cancel takes everything in the
+	chain, scope or not"
+	| instance token |
+	instance := self flowWaitingFromOutside newInstance.
+	instance executeWith: 1.
+	token := instance openWaitingEntries first token.
+	token scope: nil.
+
+	self assert: instance cancel asArray equals: { token }.
+
+	self assert: token isCancelled.
+	self assert: instance suspended isEmpty.
+	self assert: instance state equals: #cancelled
 ]

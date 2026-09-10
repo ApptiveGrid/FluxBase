@@ -236,3 +236,11 @@ FBToken >> cancelled [
 FBToken >> isCancelled [
 	^ state = #cancelled
 ]
+
+{ #category : 'testing' }
+FBToken >> isInCancelledScope [
+	"does my strand live in a cancelled scope? Then nothing more may be queued or parked
+	for it, see FBScope>>isCancelled. A token from before tokens carried a scope lives in
+	none and is never held back this way"
+	^ scope notNil and: [ scope isCancelled ]
+]

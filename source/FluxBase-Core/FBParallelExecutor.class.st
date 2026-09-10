@@ -56,6 +56,12 @@ FBParallelExecutor >> buildImpliedContinuationNode [
 { #category : 'services' }
 FBParallelExecutor >> continue [
     self closeFinishedIterations.
+    self isInCancelledScope ifTrue: [
+        "the scope my loop runs in was cancelled: no further iteration starts, and what
+        was queued for the current one falls. Nothing follows the fork either - the
+        scope join never runs, and a token of a cancelled scope queues nothing"
+        pending removeAll: pending copy.
+        index := list size ].
     (pending isEmpty and: [ index < list size ]) ifTrue: [
         index := index + 1.
         self queueScopeBody ].
@@ -294,4 +300,11 @@ FBParallelExecutor >> settleAfterWithdrawal [
 	stop when the list is done and nothing waits. Only while I am the executor on top -
 	below a frame the frame's popping resumes me anyway (#resumeAfter:)"
 	flowInstance executor == self ifTrue: [ self continue ]
+]
+
+{ #category : 'testing' }
+FBParallelExecutor >> isInCancelledScope [
+	"does my loop run in a cancelled scope? Read off the fork's own token; an iteration
+	scope cancelled on its own does not stop the loop, only that iteration"
+	^ (self activationOf: node) token isInCancelledScope
 ]
