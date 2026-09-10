@@ -164,13 +164,13 @@ FBFlowInstance >> buildRootExecutor [
 { #category : 'executing' }
 FBFlowInstance >> descendFrom: aToken [
 	"my first strand descends from aToken - the token of the activation that calls me as a
-	sub flow. #scheduleStart queued my start without a token so that the start activation
-	mints a root token; put one on that work item instead, and FBFlowExecutor>>step hands
-	it to the start activation the way it hands every other queued token on.
+	sub flow. #scheduleStart queued my start under a token of my root scope; the one put
+	here instead carries that scope too, and #parent besides, and FBFlowExecutor>>step
+	hands it to the start activation the way it hands every other queued token on.
 
-	Only #parent is set, not #splitId or #scope: a sub flow is a call, not a branch of the
-	caller's split, and it opens a scope of its own (FBSubFlowBehavior>>buildChildScope).
-	Sequence, not nesting - the same relation FBBaseActivation>>childToken records.
+	#parent, not #splitId: a sub flow is a call, not a branch of the caller's split.
+	Sequence, not nesting - the same relation FBBaseActivation>>childToken records. The
+	nesting is the scope's, set before this is sent (FBSubFlowBehavior>>execute).
 
 	This is what lets an address handed out in the calling instance reach a wait in me:
 	FBWaitingReservation resolves by token ancestry, and without this link no token of mine
@@ -179,7 +179,7 @@ FBFlowInstance >> descendFrom: aToken [
 	uses it to find a reservation made upstream"
 
 	self initializeExecutor.
-	executor firstPending token: (FBToken new parent: aToken; yourself)
+	executor firstPending token: (FBToken new parent: aToken; scope: self scope; yourself)
 ]
 
 { #category : 'executing' }
@@ -338,9 +338,14 @@ FBFlowInstance >> initialize [
 	activations := OrderedCollection new
 ]
 
-{ #category : 'accessing' }
+{ #category : 'executing' }
 FBFlowInstance >> initializeExecutor [
+	"the root executor, and with it the root scope: both come into being at the same
+	moment, the first one that needs the instance to run - a write moment, which is what
+	the scope needs (see #scope for why it must not be created on a read). The start
+	token carries that scope from the first step on (FBBaseExecutor>>scheduleStart)"
 	executor ifNotNil: [ ^ self ].
+	self ensureScope.
 	executor := self buildRootExecutor
 ]
 
@@ -375,8 +380,18 @@ FBFlowInstance >> isRootExecutor [
 	^ self rootExecutor = self executor
 ]
 
-{ #category : 'as yet unclassified' }
+{ #category : 'executing' }
 FBFlowInstance >> joinStateFor: aNode splitId: aSplitId [
+	"the join state of one split execution, made without a scope - for callers that have
+	none at hand. The engine goes through #joinStateFor:splitId:inScope:"
+	^ self joinStateFor: aNode splitId: aSplitId inScope: nil
+]
+
+{ #category : 'executing' }
+FBFlowInstance >> joinStateFor: aNode splitId: aSplitId inScope: aScope [
+	"the join state under which aNode collects the arrivals of one split execution,
+	made on first ask. aScope is the scope that execution ran in, kept on the state so
+	that it falls with the scope (#scopeEnded:) rather than with the whole instance"
 	| registeredCount |
 	joinStates ifNil: [ joinStates := Dictionary new ].
 	^ joinStates
@@ -386,6 +401,7 @@ FBFlowInstance >> joinStateFor: aNode splitId: aSplitId [
 			FBJoinState new
 				joinNode: aNode;
 				splitId: aSplitId;
+				scope: aScope;
 				expected: (registeredCount
 					ifNil: [ aNode incoming asOrderedCollection ]
 					ifNotNil: [ Array new: registeredCount ]);
@@ -578,20 +594,29 @@ FBFlowInstance >> rootExecutor [
 
 { #category : 'accessing' }
 FBFlowInstance >> scope [
-    "my root scope, or nil while nothing has needed one - a flow without a sub flow call
-    never opens a scope at all.
+    "my root scope, or nil for an instance that has no executor yet - or that was
+    persisted with one before scopes came with the executor.
 
     deliberately a plain reader. it used to create the root scope on first read and
     assign it, which is a write on read: on an instance materialized in a read-only
     transaction that marks it dirty and signals SoilWriteOnReadOnlyTransaction, which
     left a Zinc worker hanging on an unhandled error and made
     AGExternalFlowHookTest>>testPostToExternalHook time out without ever naming a cause.
-    FBSubFlowBehavior>>buildChildScope creates it instead, where it is first needed and
-    where a write transaction is guaranteed. Same hazard, same resolution as
+    #ensureScope creates it instead, from #initializeExecutor and from the two places that
+    open a nested scope, all of them write moments. Same hazard, same resolution as
     FBFlowInstance>>metadata and FBBaseActivation>>token, whose comment names it
     'Modification on Read'"
 
     ^ scope
+]
+
+{ #category : 'accessing' }
+FBFlowInstance >> ensureScope [
+	"my root scope, created now if I have none. Only from a write moment: the executor
+	coming into being, a sub flow call, an iteration of a parallel node - never from a
+	reader, see #scope. An instance persisted with an executor but without a scope gets
+	its root scope at the first of those that happens to it"
+	^ scope ifNil: [ scope := FBScope rootOwnedBy: nil ]
 ]
 
 { #category : 'accessing' }
@@ -764,4 +789,33 @@ FBFlowInstance >> whenAnnounced: aClass do: aBlock [
 
 	announcer ifNil: [ announcer := Announcer new ].
 	announcer when: aClass do: aBlock for: aBlock receiver
+]
+
+{ #category : 'executing' }
+FBFlowInstance >> isScopeLive: aScope [
+	"does anything still run or wait inside aScope? Read off the executors' bookkeeping
+	rather than off a stored membership: a token of aScope - or of a scope nested in it -
+	on a work item in #pending or parked for a suspension, in me or in an instance
+	executing inside me. Not off the registry: an address does not keep a scope alive -
+	a reservation for a wait that can no longer come is exactly what has to fall with
+	the scope, and a registered wait is parked, so its token is found anyway. A token
+	from before tokens carried a scope belongs to no scope and never counts"
+	^ self activeExecutors anySatisfy: [ :each | each hasTokenIn: aScope ]
+]
+
+{ #category : 'executing' }
+FBFlowInstance >> scopeEnded: aScope [
+	"aScope is over - nothing runs or waits in it any more, see #isScopeLive: - and the
+	bookkeeping of the runs inside it falls: the join states of splits that ran there,
+	and the addresses that stood for waits there. An iteration of a parallel node ends
+	this way (FBParallelExecutor>>closeFinishedIterations); the instance's own end drops
+	everything regardless (#ended), which is also what covers bookkeeping made without
+	a scope"
+	joinStates ifNotNil: [
+		joinStates keys do: [ :key |
+			(aScope encloses: (joinStates at: key) scope) ifTrue: [ joinStates removeKey: key ] ] ].
+	waitingRegistry ifNotNil: [
+		waitingRegistry entries
+			select: [ :each | each liesInScope: aScope ]
+			thenDo: [ :each | waitingRegistry takeEntryFor: each correlationId ] ]
 ]

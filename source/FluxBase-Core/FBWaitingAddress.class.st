@@ -72,3 +72,11 @@ FBWaitingAddress >> waitingNode [
 	from"
 	^ self subclassResponsibility
 ]
+
+{ #category : 'testing' }
+FBWaitingAddress >> liesInScope: aScope [
+	"does the wait I name live in aScope, or in a scope nested in it? What lets an
+	address fall with its iteration (FBFlowInstance>>scopeEnded:) instead of only with
+	the instance"
+	^ self subclassResponsibility
+]

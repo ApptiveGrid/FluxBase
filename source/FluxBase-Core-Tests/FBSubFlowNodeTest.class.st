@@ -64,12 +64,12 @@ FBSubFlowNodeTest >> testInnermostWaitingExecutorReachesIntoTheSubFlow [
 ]
 
 { #category : 'tests' }
-FBSubFlowNodeTest >> testSubFlowCallCreatesTheCallersRootScope [
-    "the caller has no scope until a sub flow call needs one - FBSubFlowBehavior>>buildChildScope
-    creates it there, rather than a lazy #scope getter creating it on any read (see
-    FBFlowInstanceTest>>testReadingScopeCreatesNoScope). the depth chain has to come out
-    the same either way"
-    | childStart childFlow instance |
+FBSubFlowNodeTest >> testASubFlowCallNestsItsScopeInTheCallers [
+    "the caller has its root scope from its first step (FBFlowInstanceTest>>
+    testTheRootScopeComesWithTheExecutorNotWithAReading); a sub flow call opens a scope
+    nested in the scope the calling activation ran in, owned by the sub flow node, and
+    the child's first token lives there"
+    | childStart childFlow instance child |
     childStart := FBStartEvent new.
     childStart addOutgoingNode: FBEndEvent new.
     childFlow := FBFlow new start: childStart.
@@ -78,9 +78,13 @@ FBSubFlowNodeTest >> testSubFlowCallCreatesTheCallersRootScope [
     self assert: instance scope isNil.
     instance executeWith: 1.
 
+    child := instance subFlowInstances first.
     self assert: instance scope notNil.
-    self assert: instance scope depth equals: 0.
-    self assert: instance subFlowInstances first scope depth equals: 1
+    self assert: instance scope callDepth equals: 0.
+    self assert: child scope outer identicalTo: instance scope.
+    self assert: (child scope ownerNode isKindOf: FBSubFlowNode).
+    self assert: child scope callDepth equals: 1.
+    self assert: (child activations first token scope) identicalTo: child scope
 ]
 
 { #category : 'tests' }
@@ -293,4 +297,34 @@ FBSubFlowNodeTest >> testWaitInsideSubFlowLeavesCallingInstanceWaiting [
     self assert: instance state equals: #waiting.
     self assert: instance suspended size equals: 1.
     self assert: instance suspended first class equals: FBPluggableWait
+]
+
+{ #category : 'tests' }
+FBSubFlowNodeTest >> testIterationsOfAParallelNodeDoNotCountAsCallDepth [
+    "a sub flow called from inside a parallel node runs in a scope nested in the
+    iteration's scope. The recursion guard counts calls, not nesting (FBScope>>callDepth):
+    with #maxDepth 1 the call is allowed from every iteration, although each iteration
+    nests one scope deeper than the root"
+    | childStart childFlow start fork subNode flow instance |
+    childStart := FBStartEvent new.
+    childStart addOutgoingNode: FBEndEvent new.
+    childFlow := FBFlow new start: childStart.
+
+    start := FBStartEvent new.
+    fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+    subNode := fork addOutgoingNode: FBSubFlowNode new.
+    subNode subFlow: childFlow; maxDepth: 1.
+    (subNode addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+        addOutgoingNode: FBEndEvent new.
+    flow := FBFlow new start: start.
+    instance := flow newInstance.
+
+    instance executeWith: #( 1 2 3 ).
+
+    self assert: instance state equals: #done.
+    self assert: instance subFlowInstances size equals: 3.
+    instance subFlowInstances do: [ :child |
+        self assert: child scope callDepth equals: 1.
+        self assert: child scope depth equals: 2.
+        self assert: child scope outer ownerNode identicalTo: fork ]
 ]

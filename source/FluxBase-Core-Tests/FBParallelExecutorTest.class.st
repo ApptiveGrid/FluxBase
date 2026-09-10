@@ -48,13 +48,14 @@ FBParallelExecutorTest >> testScopeBodyIsQueuedWithTheForksOwnChildToken [
 	self assert: bodyTokens asSet size equals: 2
 ]
 
-{ #category : 'as yet unclassified' }
-FBParallelExecutorTest >> testAFinishedParallelScopeLeavesNoJoinStates [
-	"the growth case: every iteration of a parallel scope passes through the split again
-	and is its own split execution, so the join states pile up one per iteration - the
-	node behind the join sees one, then two. They fall with the end of the instance
-	(FBFlowInstance>>ended), not with the iteration: an iteration's end is the scope's
-	business, and the scope is not built out that far yet"
+{ #category : 'tests' }
+FBParallelExecutorTest >> testAnIterationsJoinStateFallsWithTheIteration [
+	"every iteration of a parallel scope passes through the split again and is its own
+	split execution with its own join state. The state falls with the iteration, not
+	with the instance: the node behind the join sees one state on the first pass and
+	still one on the second, because the first iteration's scope ended in between
+	(FBFlowInstance>>scopeEnded:, FBParallelExecutor>>closeFinishedIterations). And a
+	finished instance holds none"
 	| start fork split a b join after end flow instance seen |
 	seen := OrderedCollection new.
 	start := FBStartEvent new.
@@ -76,9 +77,8 @@ FBParallelExecutorTest >> testAFinishedParallelScopeLeavesNoJoinStates [
 	instance executeWith: #( 10 20 ).
 
 	self assert: instance state equals: #done.
-	self assert: seen asArray equals: #( 1 2 ).
-	self assert: (instance instVarNamed: 'joinStates') isNil.
-	self assert: (instance instVarNamed: 'splitBranchCounts') isNil
+	self assert: seen asArray equals: #( 1 1 ).
+	self assert: (instance instVarNamed: 'joinStates') isNil
 ]
 
 { #category : 'as yet unclassified' }
@@ -175,4 +175,34 @@ FBParallelExecutorTest >> testTokenOfAnExecutorPersistedWithASingleTokenPerSuspe
 	self assert: (executor takeTokenForSuspended: node) == token.
 	"and it is forgotten, exactly as a token taken out of a queue is"
 	self assert: (executor takeTokenForSuspended: node) isNil
+]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testEachIterationRunsInItsOwnScope [
+	"an iteration is a lifetime: its tokens live in a scope of their own, opened per
+	iteration, owned by the fork and nested in the scope the fork ran in - the root
+	scope here. Two iterations, two scopes, one outer"
+	| start fork body end flow instance scopes |
+	scopes := OrderedCollection new.
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	body := (FBPluggableTask named: 'body') block: [ :act |
+		scopes add: act token scope.
+		act value: act argument ].
+	fork --> body.
+	end := (body addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+
+	self assert: instance state equals: #done.
+	self assert: scopes size equals: 2.
+	self deny: scopes first == scopes second.
+	self assert: (scopes allSatisfy: [ :each | each ownerNode == fork ]).
+	self assert: (scopes allSatisfy: [ :each | each outer == instance scope ]).
+	self assert: (scopes allSatisfy: [ :each | each callDepth = 0 ]).
+	"the fork itself ran in the root scope"
+	self assert: (instance activations detect: [ :each | each node == fork ]) token scope
+		identicalTo: instance scope
 ]

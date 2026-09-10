@@ -7,8 +7,9 @@ Class {
 
 { #category : 'as yet unclassified' }
 FBJoinStateTest >> testAccessorsRoundTrip [
-	| joinState node |
+	| joinState node scope |
 	node := FBTask named: 'join'.
+	scope := FBScope rootOwnedBy: nil.
 	joinState := FBJoinState new.
 	joinState
 		joinNode: node;
@@ -16,13 +17,13 @@ FBJoinStateTest >> testAccessorsRoundTrip [
 		expected: (OrderedCollection with: 'a' with: 'b');
 		arrived: (OrderedCollection with: 'a');
 		released: true;
-		scopeId: 'scope-1'.
+		scope: scope.
 	self assert: joinState joinNode equals: node.
 	self assert: joinState splitId equals: 'split-1'.
 	self assert: joinState expected equals: (OrderedCollection with: 'a' with: 'b').
 	self assert: joinState arrived equals: (OrderedCollection with: 'a').
 	self assert: joinState released.
-	self assert: joinState scopeId equals: 'scope-1'
+	self assert: joinState scope identicalTo: scope
 ]
 
 { #category : 'as yet unclassified' }

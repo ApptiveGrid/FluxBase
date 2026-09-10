@@ -23,7 +23,8 @@ FBJoinBehavior >> execute [
 	activation value: self argument.
 	joinState := activation instance
 		joinStateFor: activation node
-		splitId: activation token splitId.
+		splitId: activation token splitId
+		inScope: activation token scope.
 	joinState arrived at: self arrivalKey put: self argument.
 	activation done.
 	"release once per FBJoinState. The condition is re-evaluated on every arrival, so
