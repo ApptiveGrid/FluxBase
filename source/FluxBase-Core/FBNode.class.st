@@ -290,6 +290,22 @@ FBNode >> outputFor: anActivation [
 ]
 
 { #category : 'testing' }
+FBNode >> isDeferredChoice [
+	"hook: am I an FBDeferredChoice - a split of which one branch goes on, the first one
+	whose wait is resumed? Asked of the node that opened a pass when a wait in it goes
+	on (FBFlowInstance>>decideDeferredChoiceWonBy:)"
+	^ false
+]
+
+{ #category : 'testing' }
+FBNode >> parksOnEntry [
+	"hook: does entering me park the strand - a transition into me suspended
+	(#requiresTrigger), or my own execution waiting (FBWait, FBRemoteFlowTask)? What a
+	deferred choice asks of its branches (FBDeferredChoiceBehavior)"
+	^ self requiresTrigger
+]
+
+{ #category : 'testing' }
 FBNode >> requiresTrigger [
 	"hook: does this node only proceed on an explicit external trigger (e.g. a
 	submitted form)? such a node must not be activated when a transition into it is

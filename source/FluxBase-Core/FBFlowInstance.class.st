@@ -855,9 +855,13 @@ FBFlowInstance >> withdrawStrandsSatisfying: aBlock [
 	active chain - me and the instances executing inside me - and answer the tokens
 	taken. Out of the executors' queues (FBBaseExecutor>>withdrawTokensSatisfying:) and
 	out of the registries: an address that stood on such a token falls, so a signal on
-	it is as silent as on a consumed one. Every token taken is #cancelled; a standing
-	activation on one reads that off it, stays in the log, and gets an
-	FBNodeActivationCancelled.
+	it is as silent as on a consumed one. And the tokens of activations that stand
+	without being queued anywhere - a parallel node whose loop is open, a sub flow node
+	whose child runs - when aBlock accepts them: they are part of the strand, the loop
+	starts nothing more for a cancelled fork (FBParallelExecutor>>isStrandCancelled) and
+	the frame pops quietly for a cancelled call (FBSubFlowExecutor>>settleAfterWithdrawal).
+	Every token taken is #cancelled; an activation on one reads that off it, stays in
+	the log, and gets an FBNodeActivationCancelled.
 
 	Then the joins' side: a token taken that stood for a branch of a pass through a
 	split is a branch that will never arrive, the pass counts it, and a join that was
@@ -878,6 +882,13 @@ FBFlowInstance >> withdrawStrandsSatisfying: aBlock [
 	self activeFlowInstances do: [ :each |
 		each executors do: [ :executor | taken addAll: (executor withdrawTokensSatisfying: aBlock) ].
 		each dropWaitingAddressesOnTokensSatisfying: aBlock ].
+	self activeFlowInstances do: [ :each |
+		each activations do: [ :activation |
+			activation isDone ifFalse: [
+				| token |
+				token := activation token.
+				(token isCancelled not and: [ (taken includes: token) not and: [ aBlock value: token ] ])
+					ifTrue: [ taken add: token ] ] ] ].
 	taken do: [ :token |
 		token cancelled.
 		token activation ifNotNil: [ :activation |
@@ -967,27 +978,58 @@ FBFlowInstance >> cancelStrand: aToken [
 	was left: cancelling twice is cancelling once.
 
 	aToken itself may stand on no queue at all: the token of an activation that is still
-	running - a parallel node whose loop is open, a sub flow node whose child runs.
-	That activation is part of the strand and reads #cancelled from now on; its token is
-	marked before the withdrawal, since the settling after it asks (a loop whose fork's
-	strand fell starts nothing more and goes on with nothing,
-	FBParallelExecutor>>isStrandCancelled). An activation already done is history, its
-	token stays as it is - the strand from there on is what falls.
+	running - a parallel node whose loop is open, a sub flow node whose child runs. That
+	activation is part of the strand and falls with it (#withdrawStrandsSatisfying: takes
+	standing activations as well); an activation already done is history, its token stays
+	as it is - the strand from there on is what falls.
 
 	This is Cancel Activity (WCP-19), and the selection an abbrechender Join makes over
 	its siblings. A join a cancelled branch was heading to knows (FBJoinState>>canRelease)"
 
-	| taken standing |
-	standing := aToken isCancelled not and: [
-		aToken activation notNil and: [ aToken activation isDone not ] ].
-	standing ifTrue: [ aToken cancelled ].
+	| taken |
 	taken := self withdrawStrandsSatisfying: [ :each | each == aToken or: [ each hasAncestor: aToken ] ].
-	(standing and: [ (taken includes: aToken) not ]) ifTrue: [
-		self addEvent: (FBNodeActivationCancelled new activation: aToken activation) ].
-	(taken isEmpty and: [ standing not ]) ifTrue: [ ^ taken ].
+	taken ifEmpty: [ ^ taken ].
 	self addEvent: (FBStrandCancelled new token: aToken).
 	self endIfOver.
 	^ taken
+]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> decideDeferredChoiceWonBy: aToken [
+	"a wait on aToken's strand goes on. Every deferred choice along its ancestry that is
+	not decided yet is decided by it: the branch aToken lies on is the winner, the other
+	branches fall (#decideDeferredChoice:wonBy:). Along the ancestry rather than off
+	aToken's own pass: a wait inside a sub flow a branch called carries no pass of its
+	own, and a choice nested in a branch of another decides the outer one as well - the
+	outer branch has gone on. Sent from the one continuation path
+	(FBBaseExecutor>>resume:withToken:value:) and by a condition wait that holds at once
+	(FBWaitForConditionBehavior); a strand that lies on no choice is left alone.
+	Answers the tokens taken"
+
+	| taken current |
+	taken := OrderedCollection new.
+	current := aToken.
+	[ current notNil ] whileTrue: [
+		current split ifNotNil: [ :pass |
+			(pass node notNil and: [ pass node isDeferredChoice and: [ pass isDecided not ] ]) ifTrue: [
+				taken addAll: ((pass origin activation ifNil: [ self ] ifNotNil: [ :origin | origin instance ])
+					decideDeferredChoice: pass wonBy: (pass branchOf: current)) ] ].
+		current := current parent ].
+	^ taken
+]
+
+{ #category : 'cancelling' }
+FBFlowInstance >> decideDeferredChoice: aPass wonBy: aBranchToken [
+	"aPass - a pass through an FBDeferredChoice - is decided: the branch beginning with
+	aBranchToken goes on, everything else that descends from the choice falls, queued or
+	parked, standing in a loop or a sub flow, in me or in an instance executing inside me
+	(#withdrawStrandsSatisfying:). Recorded once as an FBDeferredChoiceDecided; the
+	strands taken leave their own traces. Asked of the instance the choice ran in"
+	aPass decide.
+	self addEvent: (FBDeferredChoiceDecided new choice: aPass node winner: aBranchToken).
+	^ self withdrawStrandsSatisfying: [ :each |
+		(each hasAncestor: aPass origin) and: [
+			each ~~ aBranchToken and: [ (each hasAncestor: aBranchToken) not ] ] ]
 ]
 
 { #category : 'cancelling' }

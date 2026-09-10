@@ -45,3 +45,11 @@ FBSubFlowNode >> subFlow: aFBFlow [
 FBSubFlowNode >> opensCallScope [
 	^ true
 ]
+
+{ #category : 'testing' }
+FBSubFlowNode >> parksOnEntry [
+	"a call may take part in a deferred choice: its child usually waits - at a form, a
+	remote flow - and a child that runs through decides the choice as it finishes
+	(FBSubFlowExecutor>>finish), the way a condition that holds at once does"
+	^ true
+]

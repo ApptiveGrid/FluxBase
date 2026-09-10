@@ -78,6 +78,9 @@ FBSubFlowExecutor >> finish [
               'sub flow ended in error and no #error transition is modelled' ].
     isError ifFalse: [ callerActivation value: self childResult ].
     self popThenResume: [
+        "a call that went through is a branch that went on: it decides a deferred
+        choice the call lies on, once this frame is off the stack"
+        callerActivation instance decideDeferredChoiceWonBy: callerActivation token.
         callerActivation done.
         matchedTransition
             ifNotNil: [ callerActivation followTransition: matchedTransition ]
@@ -152,12 +155,14 @@ FBSubFlowExecutor >> suspended [
 { #category : 'cancelling' }
 FBSubFlowExecutor >> settleAfterWithdrawal [
     "the strands taken out may have been the child's last. A child whose scope was
-    cancelled - on its own or with the caller's - is over by decision: the frame pops
+    cancelled - on its own or with the caller's - and a call whose own strand was
+    taken back (the caller's token falls with the strand it lies on,
+    FBFlowInstance>>withdrawStrandsSatisfying:) are over by decision: the frame pops
     without a result and without an error, the call itself reads #cancelled. A child
-    that is over without an end for another reason - a strand cancelled inside it,
-    Cancel Activity - fails its caller the way an errored child without an #error
-    transition does, until a cancelling join gives that case a shape of its own"
-    childInstance isCancelled ifTrue: [
+    that is over without an end for another reason - a strand cancelled inside it
+    alone - fails its caller the way an errored child without an #error transition
+    does: it delivered nothing, and the caller was not cancelled"
+    (childInstance isCancelled or: [ callerActivation token isCancelled ]) ifTrue: [
         callerActivation token cancelled.
         ^ self popThenResume: [ ] ].
     childInstance atEnd ifFalse: [ ^ self ].
