@@ -16,6 +16,10 @@ releasing the join immediately.
 			is re-keyed to sourceNode -> value on release, which is the shape
 			a following node can read (FBJoinBehavior>>outputFrom:).
 	released	guard against releasing the same join twice
+	scope		the FBScope the split execution I belong to ran in - an iteration of
+			a parallel node, a sub flow call, or the instance's root. What lets me
+			fall with that scope instead of with the whole instance
+			(FBFlowInstance>>scopeEnded:)
 "
 Class {
 	#name : 'FBJoinState',
@@ -26,7 +30,7 @@ Class {
 		'expected',
 		'arrived',
 		'released',
-		'scopeId'
+		'scope'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -82,16 +86,6 @@ FBJoinState >> released: aBoolean [
 ]
 
 { #category : 'as yet unclassified' }
-FBJoinState >> scopeId [
-	^ scopeId
-]
-
-{ #category : 'as yet unclassified' }
-FBJoinState >> scopeId: anObject [
-	scopeId := anObject
-]
-
-{ #category : 'as yet unclassified' }
 FBJoinState >> splitId [
 	^ splitId
 ]
@@ -99,4 +93,14 @@ FBJoinState >> splitId [
 { #category : 'as yet unclassified' }
 FBJoinState >> splitId: anObject [
 	splitId := anObject
+]
+
+{ #category : 'accessing' }
+FBJoinState >> scope [
+	^ scope
+]
+
+{ #category : 'accessing' }
+FBJoinState >> scope: aScope [
+	scope := aScope
 ]

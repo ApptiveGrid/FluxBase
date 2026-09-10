@@ -48,9 +48,9 @@ started it, which is why it is mine and not the activation's; the three step
 statements - #created, #done, #error - stay on FBBaseActivation, and its #state
 answers #waiting off me.
 
-Not all of me is wired up. Only #splitId, #parent and #state currently drive
-decisions. #scope is not populated by anything yet, and #metadata has no
-readers at all - the engine keeps the current value on the activation, not on me.
+#splitId, #parent, #scope and #state drive decisions. A #metadata field once lived here
+too; it never had a reader - the engine keeps the current value on the activation, not
+on me - and is gone.
 "
 Class {
 	#name : 'FBToken',
@@ -62,7 +62,6 @@ Class {
 		'parent',
 		'splitId',
 		'state',
-		'metadata',
 		'parentId',
 		'scopeId'
 	],
@@ -138,16 +137,6 @@ FBToken >> initialize [
 	super initialize.
 	id := FBIdGenerator current newId.
 	state := #ready
-]
-
-{ #category : 'as yet unclassified' }
-FBToken >> metadata [
-	^ metadata
-]
-
-{ #category : 'as yet unclassified' }
-FBToken >> metadata: anObject [
-	metadata := anObject
 ]
 
 { #category : 'accessing' }

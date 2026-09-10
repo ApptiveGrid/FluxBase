@@ -498,3 +498,11 @@ FBNode >> when: aBlock [
 		target: self;
 		condition: aBlock
 ]
+
+{ #category : 'testing' }
+FBNode >> opensCallScope [
+	"does the scope I open count as a sub flow call for the recursion guard? Only
+	FBSubFlowNode does; a parallel node opens a scope per iteration that is nesting, not
+	calling. See FBScope>>callDepth"
+	^ false
+]

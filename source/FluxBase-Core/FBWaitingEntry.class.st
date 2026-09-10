@@ -110,3 +110,9 @@ FBWaitingEntry >> token [
 FBWaitingEntry >> token: aFBToken [
 	token := aFBToken
 ]
+
+{ #category : 'testing' }
+FBWaitingEntry >> liesInScope: aScope [
+	"my token is the parked strand's own"
+	^ token notNil and: [ aScope encloses: token scope ]
+]

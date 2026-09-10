@@ -40,3 +40,8 @@ FBSubFlowNode >> subFlow: aFBFlow [
         ifFalse: [ FBSubFlowInvalidTarget signal: 'sub flow must have exactly one end node, got ', aFBFlow endNodes size printString ].
     subFlow := aFBFlow
 ]
+
+{ #category : 'testing' }
+FBSubFlowNode >> opensCallScope [
+	^ true
+]

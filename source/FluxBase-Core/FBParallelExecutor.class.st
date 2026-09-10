@@ -5,7 +5,10 @@ Class {
 		'list',
 		'node',
 		'index',
-		'map'
+		'map',
+		'iterationScope',
+		'iterationScopeIndex',
+		'openIterationScopes'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -52,14 +55,12 @@ FBParallelExecutor >> buildImpliedContinuationNode [
 
 { #category : 'services' }
 FBParallelExecutor >> continue [
+    self closeFinishedIterations.
     (pending isEmpty and: [ index < list size ]) ifTrue: [
         index := index + 1.
         self queueScopeBody ].
-
     pending isEmpty ifFalse: [ ^ self ].
-
     suspended isEmpty ifFalse: [ ^ self ].
-
     (self activationOf: node) done.
     self stop
 ]
@@ -202,9 +203,9 @@ FBParallelExecutor >> scopeToken [
 	"the token the head of this scope's body runs under for the iteration being
 	entered: a child token of the fork's own activation, which is exactly what
 	FBBaseActivation>>followAllOutgoing would have handed out had the fork's outgoing
-	transitions been followed outside a parallel scope. A fresh one per iteration, so
-	two passes through a split inside the scope are two split executions and each gets
-	its own FBJoinState.
+	transitions been followed outside a parallel scope - living in the iteration's own
+	scope (#currentIterationScope). A fresh one per iteration, so two passes through a
+	split inside the scope are two split executions and each gets its own FBJoinState.
 
 	Minted in #step rather than in #queueScopeBody because #node: - the first of the
 	three places that queue the body - runs before FBFlowInstance>>pushExecutor: has
@@ -214,6 +215,8 @@ FBParallelExecutor >> scopeToken [
 	what makes a missing one identify a body seed"
 
 	^ (self activationOf: node) childToken
+		scope: self currentIterationScope;
+		yourself
 ]
 
 { #category : 'private' }
@@ -246,4 +249,32 @@ FBParallelExecutor >> step [
         ifTrue: [ self continue ].
 
     
+]
+
+{ #category : 'private' }
+FBParallelExecutor >> currentIterationScope [
+	"the scope of the iteration being entered, opened on first ask per iteration and
+	nested in the scope the fork itself runs in. One per iteration, however many
+	outgoing transitions the fork has: #scopeToken is sent once per body seed"
+	iterationScopeIndex = index ifTrue: [ ^ iterationScope ].
+	iterationScope := ((self activationOf: node) token scope
+		ifNil: [ flowInstance ensureScope ]) childOwnedBy: node.
+	iterationScopeIndex := index.
+	openIterationScopes ifNil: [ openIterationScopes := OrderedCollection new ].
+	openIterationScopes add: iterationScope.
+	^ iterationScope
+]
+
+{ #category : 'private' }
+FBParallelExecutor >> closeFinishedIterations [
+	"an iteration is over when nothing runs or waits in its scope any more - not when
+	the next one starts, since an iteration may still wait at a form while later ones
+	run. Asked whenever this executor continues, so an iteration's join states and
+	addresses fall as soon as it is done (FBFlowInstance>>scopeEnded:), which is what
+	keeps a long loop from piling up the bookkeeping of every pass until the instance
+	ends"
+	openIterationScopes ifNil: [ ^ self ].
+	(openIterationScopes reject: [ :each | flowInstance isScopeLive: each ]) do: [ :each |
+		flowInstance scopeEnded: each.
+		openIterationScopes remove: each ]
 ]

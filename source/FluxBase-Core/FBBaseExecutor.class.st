@@ -349,13 +349,15 @@ FBBaseExecutor >> rootExecutor [
 		ifNil: [ self ]
 ]
 
-{ #category : 'as yet unclassified' }
+{ #category : 'executing' }
 FBBaseExecutor >> scheduleStart [
-	"the start pseudo-transition is queued through #addPending: like any other work,
-	so #pending has a single writer. it carries no token: the start node's own
-	activation mints the first one (FBBaseActivation>>initialize)"
+	"the start pseudo-transition is queued through #addPending:withToken: like any other
+	work, so #pending has a single writer. Its token is the first of the instance: it
+	carries the root scope, and every token after it inherits that through
+	FBBaseActivation>>childToken - until a sub flow call or an iteration opens a scope
+	of its own. FBFlowInstance>>descendFrom: replaces this token for a sub flow child"
 
-	self addPending: flowInstance start.
+	self addPending: flowInstance start withToken: (FBToken new scope: flowInstance scope; yourself).
 	flowInstance addEvent: FBFlowInstanceStarted new
 ]
 
@@ -378,4 +380,17 @@ FBBaseExecutor >> suspendedExecutor [
 FBBaseExecutor >> suspendedExecutor: anObject [
 
 	suspendedExecutor := anObject
+]
+
+{ #category : 'testing' }
+FBBaseExecutor >> hasTokenIn: aScope [
+	"is a token of aScope, or of a scope nested in it, still with me - queued on a work
+	item or parked for a suspension? What FBFlowInstance>>isScopeLive: asks every active
+	executor. A pending entry from before FBWorkItem existed carries no token"
+	(pending anySatisfy: [ :each | aScope encloses: each token scope ]) ifTrue: [ ^ true ].
+	suspendedTokens ifNil: [ ^ false ].
+	^ suspendedTokens values anySatisfy: [ :tokens |
+		(tokens isKindOf: Collection)
+			ifTrue: [ tokens anySatisfy: [ :token | aScope encloses: token scope ] ]
+			ifFalse: [ aScope encloses: tokens scope ] ]
 ]

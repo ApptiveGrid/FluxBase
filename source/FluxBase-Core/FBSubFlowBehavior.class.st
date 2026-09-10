@@ -7,23 +7,18 @@ Class {
 
 { #category : 'private' }
 FBSubFlowBehavior >> buildChildScope [
-    "answer a new scope for the sub flow call, one level deeper than the calling flow
-    instance's scope. signals FBSubFlowMaxDepthExceeded if that would exceed the node's
-    configured maxDepth.
+    "answer a new scope for the sub flow call, nested in the scope the calling activation
+    runs in - an iteration's scope when the call sits inside a parallel node, the
+    caller's root scope otherwise. Signals FBSubFlowMaxDepthExceeded if that would exceed
+    the node's configured maxDepth, counted in calls (FBScope>>callDepth), not in
+    nesting: iterations nest scopes without being calls.
 
-    creates the caller's root scope if it has none yet, which is the case for the
-    outermost instance up to its first sub flow call. that write lives here rather than
-    in a lazy FBFlowInstance>>scope getter for one reason: this is the first moment a
-    scope is actually needed, and it is reached from a node activation, so a write
-    transaction is guaranteed - whereas a plain read of #scope can happen in a read-only
-    one, where assigning signals SoilWriteOnReadOnlyTransaction"
-    | instance parentScope |
-    instance := activation flowInstance.
-    parentScope := instance scope.
-    parentScope ifNil: [
-        parentScope := FBScope rootOwnedBy: nil.
-        instance scope: parentScope ].
-    parentScope depth + 1 > self node maxDepth
+    An instance persisted before tokens carried a scope has none on its activation's
+    token; it gets its root scope now - this is a node activation, so a write
+    transaction is guaranteed, see FBFlowInstance>>ensureScope"
+    | parentScope |
+    parentScope := activation token scope ifNil: [ activation flowInstance ensureScope ].
+    parentScope callDepth + 1 > self node maxDepth
         ifTrue: [ FBSubFlowMaxDepthExceeded signal: 'sub flow call depth exceeds maximum of ', self node maxDepth printString ].
     ^ parentScope childOwnedBy: self node
 ]

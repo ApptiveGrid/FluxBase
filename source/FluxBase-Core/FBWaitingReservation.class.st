@@ -116,3 +116,10 @@ FBWaitingReservation >> waitingNode [
 	"no suspension yet - the node the wait will be at is what a link is built from"
 	^ targetNode
 ]
+
+{ #category : 'testing' }
+FBWaitingReservation >> liesInScope: aScope [
+	"my anchor is the token of the activation that handed me out - the wait I stand for
+	descends from it, so it lives where the anchor lives"
+	^ anchorToken notNil and: [ aScope encloses: anchorToken scope ]
+]

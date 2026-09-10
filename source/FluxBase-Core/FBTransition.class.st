@@ -167,3 +167,11 @@ FBTransition >> transition [
 	backwards path"
 	^ self
 ]
+
+{ #category : 'accessing' }
+FBTransition >> token [
+	"the other half of duck-typing as an FBWorkItem (see #transition): a pending entry
+	persisted before work items existed is a raw transition, and it was queued without a
+	token"
+	^ nil
+]

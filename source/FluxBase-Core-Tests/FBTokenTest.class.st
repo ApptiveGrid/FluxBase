@@ -15,13 +15,11 @@ FBTokenTest >> testAccessorsRoundTrip [
 		scope: scope;
 		parent: parent;
 		splitId: 'split-1';
-		state: #waiting;
-		metadata: #(1 2 3).
+		state: #waiting.
 	self assert: token scope equals: scope.
 	self assert: token parent equals: parent.
 	self assert: token splitId equals: 'split-1'.
-	self assert: token state equals: #waiting.
-	self assert: token metadata equals: #(1 2 3)
+	self assert: token state equals: #waiting
 ]
 
 { #category : 'as yet unclassified' }

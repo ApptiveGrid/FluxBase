@@ -50,20 +50,28 @@ FBFlowInstanceTest >> testInnermostWaitingExecutorIsNilWhenNothingWaits [
 ]
 
 { #category : 'tests' }
-FBFlowInstanceTest >> testReadingScopeCreatesNoScope [
-	"regression test: #scope used to create a root scope on first read and assign it. that
-	is a write on read - on an instance materialized in a read-only Soil transaction it
-	marks the instance dirty and signals SoilWriteOnReadOnlyTransaction, which surfaced as
-	an unrelated-looking timeout in AGExternalFlowHookTest>>testPostToExternalHook.
-	a flow without a sub flow call needs no scope at all, so reading has to leave it nil"
-	| flowInstance |
+FBFlowInstanceTest >> testTheRootScopeComesWithTheExecutorNotWithAReading [
+	"regression test, kept from the days when #scope created a root scope on first read:
+	that is a write on read - on an instance materialized in a read-only Soil transaction
+	it marks the instance dirty and signals SoilWriteOnReadOnlyTransaction, which
+	surfaced as an unrelated-looking timeout in AGExternalFlowHookTest>>
+	testPostToExternalHook. Reading still creates nothing. The root scope comes with the
+	executor instead - every instance has one from its first step, and the start token
+	lives in it"
+	| flowInstance start |
 	flowInstance := FBFlow simpleFlow newInstance.
 	self assert: flowInstance scope isNil.
 	flowInstance scope.
 	self assert: flowInstance scope isNil.
 	flowInstance executeWith: 7.
 	self assert: flowInstance state equals: #done.
-	self assert: flowInstance scope isNil
+	self assert: flowInstance scope notNil.
+	self assert: flowInstance scope outer isNil.
+	self assert: flowInstance scope callDepth equals: 0.
+	start := flowInstance activations detect: [ :each | each node == flowInstance flow start ].
+	self assert: start token scope identicalTo: flowInstance scope.
+	"and every strand after it inherits the scope"
+	self assert: (flowInstance activations allSatisfy: [ :each | each token scope == flowInstance scope ])
 ]
 
 { #category : 'tests' }
@@ -207,15 +215,17 @@ FBFlowInstanceTest >> testListNodeEvents [
 	self assert: events size equals: 2
 ]
 
-{ #category : 'as yet unclassified' }
-FBFlowInstanceTest >> testNodeActivationEventScopeIdAndSplitIdAreNilBeforePhase3Wiring [
+{ #category : 'tests' }
+FBFlowInstanceTest >> testNodeActivationEventCarriesTheRootScopeIdAndNoSplitId [
+	"the event log reports the scope by id - the root scope's, for a flow without sub
+	flows or parallel nodes - and no split id where no split ran"
 	| flowInstance node event |
 	flowInstance := FBFlow simpleFlow newInstance.
 	flowInstance initialValue: 7.
 	flowInstance execute.
 	node := flowInstance flow nodes second.
 	event := (flowInstance eventsOfNode: node) detect: [ :e | e isKindOf: FBNodeActivationDone ].
-	self assert: event scopeId isNil.
+	self assert: event scopeId equals: flowInstance scope id.
 	self assert: event splitId isNil
 ]
 

@@ -1,33 +1,37 @@
 "
-I am a scope: a region of a running flow whose tokens share a fate.
+I am a scope: a region of a running flow whose tokens share a lifetime. Where FBToken
+tracks a single strand of execution, I bound a set of them: everything that runs inside
+me ends, at the latest, when I end - and once cancellation exists, is cancelled together.
 
-Where FBToken tracks a single strand of execution, I track a set of them that
-can be bounded, completed or cancelled together. That is why I exist next to the
-token rather than inside it: a token and its parent chain describe one path, but
-they cannot enumerate the tokens that make up a region.
+Scopes answer 'what falls together'. That is a different question from the one a
+split's #splitId answers - 'who is expected at the join' - and a split therefore opens
+no scope of its own. Three things do:
+
+	the flow instance		its root scope, there from the moment it has an executor
+				(FBFlowInstance>>initializeExecutor), owned by nothing
+	a sub flow call		FBSubFlowBehavior>>buildChildScope, owned by the FBSubFlowNode,
+				nested in the scope the calling activation ran in
+	one iteration of a		FBParallelExecutor>>currentIterationScope, owned by the
+	parallel node		FBParallelNode, nested in the scope the fork ran in
+
+Every token carries the scope it lives in (FBToken>>scope): the start token gets the
+root scope (FBBaseExecutor>>scheduleStart), a child token inherits its parent's
+(FBBaseActivation>>childToken), an iteration's or a sub flow's first token gets the
+new one. Membership is not stored anywhere else - which tokens live in me is read off
+the executors' pending and suspended bookkeeping and the waiting registry
+(FBFlowInstance>>isScopeLive:), so it cannot drift.
 
 	id			my own identity, for addressing me from outside
 	outer		the scope I am nested in, or nil if I am a root. Nesting, not
-			sequence - do not confuse this with FBToken>>parentId, which points
-			at another token and records which predecessor an activation
-			arrived through. The word is 'outer' rather than 'parent' because
-			that is the established vocabulary for scopes, and it keeps the two
-			relations apart at a glance.
-	ownerNode	the node that opened me
-	tokens		the tokens living in me
-	state		#active while I am alive
-	cancellationPolicy	how my tokens are to be cancelled together
+			sequence - FBToken>>parent records which predecessor an activation
+			arrived through. 'outer' rather than 'parent' because that is the
+			established vocabulary for scopes, and it keeps the two relations apart
+	ownerNode	the node that opened me, nil for a root
+	state		#active while I am alive; #cancelled once cancellation exists
 
-I hold my enclosing scope as a real reference, not as its id. Ids here are for
-being addressed from outside; inside the model we navigate by reference. That is
-also why #depth is computed by walking the outer chain instead of being stored:
-with only an id there was nothing to walk, so the depth had to be carried along
-as a second, derived field that could drift out of step.
-
-I am Phase-2 infrastructure and only partly consumed so far: tokens and
-cancellationPolicy have no readers yet - they are meant for the cancellation
-patterns WCP-19/20/25 - and FBToken>>scopeId is not populated, so a token does
-not yet know which of me it belongs to.
+#depth is the nesting depth, derived by walking #outer. #callDepth counts only the
+scopes a sub flow call opened, which is what the recursion guard has to compare: an
+iteration nests a scope without being a call.
 "
 Class {
 	#name : 'FBScope',
@@ -36,9 +40,7 @@ Class {
 		'id',
 		'outer',
 		'ownerNode',
-		'tokens',
-		'state',
-		'cancellationPolicy'
+		'state'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -56,16 +58,6 @@ FBScope class >> rootOwnedBy: aFBNode [
     ^ self new
         ownerNode: aFBNode;
         yourself
-]
-
-{ #category : 'as yet unclassified' }
-FBScope >> cancellationPolicy [
-	^ cancellationPolicy
-]
-
-{ #category : 'as yet unclassified' }
-FBScope >> cancellationPolicy: aSymbol [
-	cancellationPolicy := aSymbol
 ]
 
 { #category : 'instance creation' }
@@ -93,7 +85,6 @@ FBScope >> id [
 FBScope >> initialize [
 	super initialize.
 	id := FBIdGenerator current newId.
-	tokens := OrderedCollection new.
 	state := #active
 ]
 
@@ -129,12 +120,28 @@ FBScope >> state: aSymbol [
 	state := aSymbol
 ]
 
-{ #category : 'as yet unclassified' }
-FBScope >> tokens [
-	^ tokens
+{ #category : 'accessing' }
+FBScope >> callDepth [
+	"how many sub flow calls deep I am: the scopes on my #outer chain, myself included,
+	that a call opened. The recursion guard in FBSubFlowBehavior>>buildChildScope compares
+	this, not #depth - an iteration of a parallel node nests a scope without being a
+	call, and must not count as one"
+	^ (outer ifNil: [ 0 ] ifNotNil: [ :aScope | aScope callDepth ])
+		+ (self isCall ifTrue: [ 1 ] ifFalse: [ 0 ])
 ]
 
-{ #category : 'as yet unclassified' }
-FBScope >> tokens: aCollection [
-	tokens := aCollection
+{ #category : 'testing' }
+FBScope >> encloses: aScope [
+	"is aScope me or nested in me, at any depth? nil is enclosed by nothing - a token
+	persisted before tokens carried a scope belongs to no scope and falls with the
+	instance alone"
+	aScope ifNil: [ ^ false ].
+	aScope == self ifTrue: [ ^ true ].
+	^ self encloses: aScope outer
+]
+
+{ #category : 'testing' }
+FBScope >> isCall [
+	"was I opened by a sub flow call? Asked of my owner, see FBNode>>opensCallScope"
+	^ ownerNode notNil and: [ ownerNode opensCallScope ]
 ]

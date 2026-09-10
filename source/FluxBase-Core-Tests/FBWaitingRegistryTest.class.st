@@ -847,3 +847,31 @@ FBWaitingRegistryTest >> waitingInstance [
 	self assert: instance suspended size equals: 1.
 	^ instance
 ]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testAReservationOfAFinishedIterationFallsWithTheIteration [
+	"a link node inside a parallel scope reserves an address per iteration for a node the
+	flow never reaches. The reservation of an iteration that is over is dead, and it
+	falls with that iteration - while the instance still runs, because a later iteration
+	waits. Only the waiting iteration's reservation is left"
+	| start fork never link wait flow instance handedOut |
+	handedOut := OrderedCollection new.
+	never := FBTriggerTask named: 'never reached'.
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	link := fork addOutgoingNode: (self linkNodeReservingAt: never into: handedOut).
+	"the first iteration runs through, the second parks"
+	wait := FBPluggableWait new condition: [ :each | each = 10 ]; yourself.
+	link --> wait.
+	(wait addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+
+	self assert: instance state equals: #waiting.
+	self assert: handedOut size equals: 2.
+	self assert: instance openWaitingEntries asArray equals: { handedOut second }.
+	self assert: (instance waitingEntryFor: handedOut first correlationId) isNil.
+	self assert: (instance waitingEntryFor: handedOut second correlationId) identicalTo: handedOut second
+]
