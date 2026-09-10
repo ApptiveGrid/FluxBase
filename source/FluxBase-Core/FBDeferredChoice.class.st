@@ -18,6 +18,12 @@ would run at once cannot take part in a choice, since steps run to rest before a
 from outside arrives, and my behavior refuses such a model. I open a pass like every
 split (FBSplitExecution), which is what remembers whether I was decided and where my
 branches began (#origin).
+
+Abstract in the sense of the exposed node set only, like FBRemoteFlowTask and
+FBTerminateEvent: ApptiveGrid lists every non-abstract node class to its client as a type
+a user can pick, and the client knows nothing of a choice yet. Instantiable all the same;
+the tests build me directly. An ApptiveBase subclass lifts this once the client can show
+and configure one.
 "
 Class {
 	#name : 'FBDeferredChoice',
@@ -26,6 +32,12 @@ Class {
 	#package : 'FluxBase-Core',
 	#tag : 'Model'
 }
+
+{ #category : 'testing' }
+FBDeferredChoice class >> isAbstract [
+	"see the class comment: out of the exposed node set until the client knows the node"
+	^ true
+]
 
 { #category : 'instance creation' }
 FBDeferredChoice class >> typeName [
