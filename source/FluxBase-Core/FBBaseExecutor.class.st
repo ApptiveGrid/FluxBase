@@ -303,10 +303,18 @@ FBBaseExecutor >> resume: aSuspension withToken: aToken value: aValue [
 	fresh activation, a node that parked inside its own execution still has one. So
 	FBTransition and FBNode each implement #resumeIn:withToken:value:.
 
-	The registry entries naming aSuspension go first: a wait that is over has no address
-	any more, whichever way it was continued. Asked of my own instance's registry, not
-	through #openWaitingEntries - the entry was registered on the instance whose executor
-	holds the suspension (FBBaseActivation>>waitForNode:withToken:), and #openWaitingEntries
+	The registry entry of the wait that goes on falls with it: a wait that is over has no
+	address any more, whichever way it was continued. The entry of that wait, not every
+	entry naming aSuspension - two iterations of a parallel scope park the very same
+	transition or node, each with an entry on its own token, and the first one resumed
+	must not take the second one's address with it (that is what it did until 2026-09-10:
+	the second link answered a silent false while its token still waited). Which entry is
+	the wait's is told by the token, so the token is taken first and the entry dropped
+	after it, by token; only a resume that ends up with no token at all - a suspension
+	parked before tokens were kept - drops every entry of the suspension, as there is
+	nothing to tell them apart by. Asked of my own instance's registry, not through
+	#openWaitingEntries - the entry was registered on the instance whose executor holds
+	the suspension (FBBaseActivation>>waitForNode:withToken:), and #openWaitingEntries
 	answers openness, which is momentarily false in the middle of a resume: between
 	removing the last suspension and activating what it goes on with, nothing is pending
 	and nothing suspended, and #isDone is true. A reservation is not an entry of the
@@ -326,12 +334,13 @@ FBBaseExecutor >> resume: aSuspension withToken: aToken value: aValue [
 	submitted on it"
 
 	| token |
-	flowInstance dropWaitingEntriesMatching: aSuspension.
-	suspended remove: aSuspension.
 	token := self
 		takeTokenForSuspended: aSuspension
 		satisfying: [ :each | aToken isNil or: [ each == aToken ] ].
-	^ aSuspension resumeIn: self withToken: (aToken ifNil: [ token ]) value: aValue
+	token := aToken ifNil: [ token ].
+	flowInstance dropWaitingEntriesMatching: aSuspension token: token.
+	suspended remove: aSuspension.
+	^ aSuspension resumeIn: self withToken: token value: aValue
 ]
 
 { #category : 'as yet unclassified' }

@@ -875,3 +875,40 @@ FBWaitingRegistryTest >> testAReservationOfAFinishedIterationFallsWithTheIterati
 	self assert: (instance waitingEntryFor: handedOut first correlationId) isNil.
 	self assert: (instance waitingEntryFor: handedOut second correlationId) identicalTo: handedOut second
 ]
+
+{ #category : 'tests' }
+FBWaitingRegistryTest >> testResumingOneOfTwoIterationsWaitingAtOneNodeLeavesTheOtherItsAddress [
+	"two iterations of a parallel scope wait at the very same node, each registered under
+	its own token. Signalling the first has to resume the first alone: the second keeps
+	its address and is resumed by its own signal. The resume used to drop every entry
+	naming the suspension, so the second link answered a silent false while its token
+	still waited - one flow form per list entry, and the first submit spent the other
+	links. The transition-shaped wait (a trigger target) goes the same way through
+	FBBaseExecutor>>resume:withToken:value:"
+	| start fork wait flow instance first second |
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	wait := fork addOutgoingNode: (FBExternalWait new condition: [ :each | false ]; yourself).
+	(wait addOutgoingNode: (FBParallelJoinNode named: 'scope join'))
+		addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 10 20 ).
+	self assert: instance openWaitingEntries size equals: 2.
+	first := instance openWaitingEntries first.
+	second := instance openWaitingEntries second.
+	self assert: first suspension identicalTo: second suspension.
+	self deny: first token identicalTo: second token.
+
+	self assert: (instance signal: first correlationId with: 1).
+
+	"the second iteration still waits, under its own address and its own token"
+	self assert: instance openWaitingEntries asArray equals: { second }.
+	self assert: (instance waitingEntryFor: second correlationId) identicalTo: second.
+	self assert: instance suspended size equals: 1.
+
+	self assert: (instance signal: second correlationId with: 2).
+	instance execute.
+	self assert: instance state equals: #done.
+	self assert: instance openWaitingEntries isEmpty
+]
