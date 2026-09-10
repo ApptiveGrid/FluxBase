@@ -7,18 +7,20 @@ Class {
 
 { #category : 'as yet unclassified' }
 FBTokenTest >> testAccessorsRoundTrip [
-	| token parent scope |
+	| token parent scope split |
 	parent := FBToken new.
 	scope := FBScope new.
+	split := FBSplitExecution new.
 	token := FBToken new.
 	token
 		scope: scope;
 		parent: parent;
-		splitId: 'split-1';
+		split: split;
 		state: #waiting.
 	self assert: token scope equals: scope.
 	self assert: token parent equals: parent.
-	self assert: token splitId equals: 'split-1'.
+	self assert: token split identicalTo: split.
+	self assert: token splitId equals: split id.
 	self assert: token state equals: #waiting
 ]
 

@@ -23,7 +23,7 @@ FBJoinBehavior >> execute [
 	activation value: self argument.
 	joinState := activation instance
 		joinStateFor: activation node
-		splitId: activation token splitId
+		split: activation token split
 		inScope: activation token scope.
 	joinState arrived at: self arrivalKey put: self argument.
 	activation done.
@@ -37,7 +37,9 @@ FBJoinBehavior >> execute [
 	(joinState arrived size >= joinState expected size) ifTrue: [
 		joinState released: true.
 		activation value: (self outputFrom: joinState).
-		activation followAllOutgoing ]
+		"the pass is closed: behind me the strand is a branch of the enclosing split
+		again, so the outgoing tokens get that one - or none at the outermost level"
+		activation followAllOutgoingInSplit: (joinState split ifNotNil: [ :split | split outer ]) ]
 ]
 
 { #category : 'as yet unclassified' }

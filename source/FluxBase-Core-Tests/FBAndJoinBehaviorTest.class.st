@@ -51,7 +51,7 @@ FBAndJoinBehaviorTest >> testDoesNotProceedUntilAllBranchesHaveArrived [
 
 { #category : 'as yet unclassified' }
 FBAndJoinBehaviorTest >> testDuplicateArrivalOnTheSameBranchIsNotCountedTwice [
-	| start split a b join end flow instance realActivationForA duplicate1 duplicate2 joinState splitIdUsed |
+	| start split a b join end flow instance realActivationForA duplicate1 duplicate2 joinState passUsed |
 	start := FBStartEvent new.
 	split := FBAndSplit named: 'split'.
 	a := FBTask named: 'a'.
@@ -69,14 +69,14 @@ FBAndJoinBehaviorTest >> testDuplicateArrivalOnTheSameBranchIsNotCountedTwice [
 	instance step. "split"
 	instance step. "a itself runs (not yet at join)"
 	realActivationForA := instance activationOfNode: a.
-	splitIdUsed := realActivationForA token splitId.
+	passUsed := realActivationForA token split.
 	duplicate1 := FBActivation new executor: instance executor; node: join; argument: 10; yourself.
-	duplicate1 token splitId: splitIdUsed; parent: realActivationForA token.
+	duplicate1 token split: passUsed; parent: realActivationForA token.
 	duplicate2 := FBActivation new executor: instance executor; node: join; argument: 20; yourself.
-	duplicate2 token splitId: splitIdUsed; parent: realActivationForA token.
+	duplicate2 token split: passUsed; parent: realActivationForA token.
 	(join defaultBehaviorClass new activation: duplicate1; yourself) execute.
 	(join defaultBehaviorClass new activation: duplicate2; yourself) execute.
-	joinState := instance joinStateFor: join splitId: splitIdUsed.
+	joinState := instance joinStateFor: join split: passUsed.
 	"both arrivals carry the same parent token, so they are the same branch and
 	FBJoinBehavior>>arrivalKey answers the same key for both"
 	self assert: joinState arrived size equals: 1.
@@ -129,13 +129,16 @@ FBAndJoinBehaviorTest >> testWorksWithThreeBranches [
 
 { #category : 'as yet unclassified' }
 FBAndJoinBehaviorTest >> testJoinReleasesOnlyOnceWhenAFurtherArrivalStillSatisfiesExpected [
-	"Two branches of one split reach the join through the same predecessor 'a', so both
-	arrivals key onto the same #arrived entry and the second one still finds #expected
-	satisfied. Without the FBJoinState>>released latch the join fires for both and
-	everything behind it runs twice.
+	"Two branches of one split reach the join through the same predecessor 'a'. The
+	pass started two branches, so the join waits for both arrivals and releases on the
+	second - and only then: without the FBJoinState>>released latch a join whose
+	#expected is met by a further arrival fires again, and everything behind it runs
+	twice. That shape is still reachable, for arrivals on tokens persisted before splits
+	were objects, whose #expected is the join's incoming transitions.
 
 	The join state is picked up by identity from behind the join while the instance
-	still runs - a finished instance holds none (FBFlowInstance>>ended)"
+	still runs - a finished instance holds none (FBFlowInstance>>ended); the pass is
+	read off a branch, since behind the join the token carries the enclosing one"
 	| start split a b join probe end flow instance joinState |
 	start := FBStartEvent new.
 	split := FBAndSplit named: 'split'.
@@ -143,7 +146,7 @@ FBAndJoinBehaviorTest >> testJoinReleasesOnlyOnceWhenAFurtherArrivalStillSatisfi
 	b := FBTask named: 'b'.
 	join := FBAndJoin named: 'join'.
 	probe := (FBPluggableTask named: 'probe') block: [ :act |
-		joinState := act flowInstance joinStateFor: join splitId: act token splitId.
+		joinState := act flowInstance joinStateFor: join split: (act flowInstance activationOfNode: a) token split.
 		act value: act argument ].
 	end := FBEndEvent new.
 	start --> split.
@@ -161,11 +164,11 @@ FBAndJoinBehaviorTest >> testJoinReleasesOnlyOnceWhenAFurtherArrivalStillSatisfi
 
 { #category : 'as yet unclassified' }
 FBAndJoinBehaviorTest >> testAFinishedInstanceKeepsNoJoinState [
-	"a pass through a split leaves an FBJoinState and a branch count behind, and the
-	join cannot drop them itself - it cannot tell whether a further arrival may still
-	come, which is what the release latch is for. They fall at the end of the instance
-	instead, FBFlowInstance>>ended, once nothing runs and nothing can arrive. Measured on
-	both sides of the end: the node behind the join still sees the state, the finished
+	"a pass through a split leaves an FBJoinState behind, and the join cannot drop it
+	itself - it cannot tell whether a further arrival may still come, which is what the
+	release latch is for. It falls at the end of the instance instead,
+	FBFlowInstance>>ended, once nothing runs and nothing can arrive. Measured on both
+	sides of the end: the node behind the join still sees the state, the finished
 	instance holds none"
 	| start split a b join after end flow instance seen |
 	seen := OrderedCollection new.
@@ -174,13 +177,8 @@ FBAndJoinBehaviorTest >> testAFinishedInstanceKeepsNoJoinState [
 	a := FBTask named: 'a'.
 	b := FBTask named: 'b'.
 	join := FBAndJoin named: 'join'.
-	"the branch count is registered by hand here, the way FBMultiChoiceGatewayBehavior does
-	it for its split - an FBAndSplit registers none - so that the second kind of per-split
-	bookkeeping is measured as well"
 	after := (FBPluggableTask named: 'after') block: [ :act |
-		act flowInstance registerExpectedBranchCount: 2 forSplitId: act token splitId.
 		seen add: (act flowInstance instVarNamed: 'joinStates') size.
-		seen add: (act flowInstance instVarNamed: 'splitBranchCounts') size.
 		act value: act argument ].
 	end := FBEndEvent new.
 	start --> split.
@@ -193,11 +191,10 @@ FBAndJoinBehaviorTest >> testAFinishedInstanceKeepsNoJoinState [
 
 	self assert: instance state equals: #done.
 	self assert: (instance activations select: [ :act | act node = end ]) size equals: 1.
-	"one split execution, one state and one count - there while the instance still ran"
-	self assert: seen asArray equals: #( 1 1 ).
+	"one split execution, one state - there while the instance still ran"
+	self assert: seen asArray equals: #( 1 ).
 	"and gone with the end"
-	self assert: (instance instVarNamed: 'joinStates') isNil.
-	self assert: (instance instVarNamed: 'splitBranchCounts') isNil
+	self assert: (instance instVarNamed: 'joinStates') isNil
 ]
 
 { #category : 'as yet unclassified' }
@@ -216,7 +213,7 @@ FBAndJoinBehaviorTest >> testArrivalsThroughTheSamePredecessorAreCountedSeparate
 	b := FBTask named: 'b'.
 	join := FBAndJoin named: 'join'.
 	probe := (FBPluggableTask named: 'probe') block: [ :act |
-		joinState := act flowInstance joinStateFor: join splitId: act token splitId.
+		joinState := act flowInstance joinStateFor: join split: (act flowInstance activationOfNode: a) token split.
 		act value: act argument ].
 	end := FBEndEvent new.
 	start --> split.
@@ -230,13 +227,13 @@ FBAndJoinBehaviorTest >> testArrivalsThroughTheSamePredecessorAreCountedSeparate
 ]
 
 { #category : 'as yet unclassified' }
-FBAndJoinBehaviorTest >> testJoinReleasesWhenBranchesSharingAPredecessorSatisfyARegisteredCount [
-	"the shape a converted FBExclusiveGateway produces: the split registers how many
-	branches it started, so #expected is that count rather than the join's incoming
-	transitions. Both branches arriving through the same predecessor used to collapse
-	onto one #arrived entry, the count was never reached, and the join never released -
-	while the instance still reported itself done."
-	| start split a b join end flow instance splitId joinState parents |
+FBAndJoinBehaviorTest >> testTheJoinWaitsForAsManyBranchesAsThePassStarted [
+	"what the join waits for is what the split started (FBSplitExecution>>branchCount),
+	not how many transitions lead into the join. Two arrivals through the same
+	predecessor 'a' on distinct branch tokens are the two branches of a pass with two;
+	keyed by node they used to collapse onto one #arrived entry, the count was never
+	reached, and the join never released - while the instance still reported itself done"
+	| start split a b join end flow instance pass joinState parents |
 	start := FBStartEvent new.
 	split := FBAndSplit named: 'split'.
 	a := FBTask named: 'a'.
@@ -250,8 +247,7 @@ FBAndJoinBehaviorTest >> testJoinReleasesWhenBranchesSharingAPredecessorSatisfyA
 	flow := FBFlow new start: start.
 	instance := flow newInstance.
 	instance initializeExecutor.
-	splitId := 'split-run'.
-	instance registerExpectedBranchCount: 2 forSplitId: splitId.
+	pass := FBSplitExecution new branchCount: 2; yourself.
 	"two arrivals through the same predecessor 'a', on distinct branch tokens"
 	parents := (1 to: 2) collect: [ :each |
 		(FBActivation new executor: instance executor; node: a; yourself) token ].
@@ -262,9 +258,80 @@ FBAndJoinBehaviorTest >> testJoinReleasesWhenBranchesSharingAPredecessorSatisfyA
 			node: join;
 			argument: i * 10;
 			yourself.
-		arrival token splitId: splitId; parent: parentToken.
+		arrival token split: pass; parent: parentToken.
 		(join defaultBehaviorClass new activation: arrival; yourself) execute ].
-	joinState := instance joinStateFor: join splitId: splitId.
+	joinState := instance joinStateFor: join split: pass.
 	self assert: joinState arrived size equals: 2.
 	self assert: joinState released
+]
+
+{ #category : 'tests' }
+FBAndJoinBehaviorTest >> testNestedSplitsJoinInsideThenOutside [
+	"a split inside a branch of another split: the inner join completes the inner pass,
+	and the outer join then sees that branch arrive next to its sibling and completes
+	too. Used to end the instance #done with the outer join never released - behind the
+	inner join the tokens still carried the inner split, so the outer join kept its two
+	arrivals under two keys, one pass each, and nothing behind it ever ran"
+	| start outer inner a1 a2 innerJoin b outerJoin after end flow instance ran |
+	ran := 0.
+	start := FBStartEvent new.
+	outer := start addOutgoingNode: (FBAndSplit named: 'outer').
+	inner := outer addOutgoingNode: (FBAndSplit named: 'inner').
+	a1 := inner addOutgoingNode: (FBTask named: 'a1').
+	a2 := inner addOutgoingNode: (FBTask named: 'a2').
+	innerJoin := FBAndJoin named: 'inner join'.
+	a1 --> innerJoin.
+	a2 --> innerJoin.
+	b := outer addOutgoingNode: (FBTask named: 'b').
+	outerJoin := FBAndJoin named: 'outer join'.
+	innerJoin --> outerJoin.
+	b --> outerJoin.
+	after := (FBPluggableTask named: 'after') block: [ :act | ran := ran + 1. act value: act argument ].
+	outerJoin --> after.
+	end := after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+
+	self assert: ran equals: 1.
+	self assert: instance state equals: #done.
+	self assert: (instance activations select: [ :act | act node = innerJoin ]) size equals: 2.
+	self assert: (instance activations select: [ :act | act node = outerJoin ]) size equals: 2.
+	self assert: (instance activations select: [ :act | act node = end ]) size equals: 1
+]
+
+{ #category : 'tests' }
+FBAndJoinBehaviorTest >> testAJoinHandsItsOutgoingTokensTheEnclosingPassBack [
+	"behind a join the strand is a branch of the enclosing pass again, not of the one
+	just joined - and of none at the outermost level. The passes nest the way the
+	splits ran: the inner pass's #outer is the outer pass"
+	| start outer inner a1 a2 innerJoin behindInner b outerJoin after flow instance outerPass |
+	start := FBStartEvent new.
+	outer := start addOutgoingNode: (FBAndSplit named: 'outer').
+	inner := outer addOutgoingNode: (FBAndSplit named: 'inner').
+	a1 := inner addOutgoingNode: (FBTask named: 'a1').
+	a2 := inner addOutgoingNode: (FBTask named: 'a2').
+	innerJoin := FBAndJoin named: 'inner join'.
+	a1 --> innerJoin.
+	a2 --> innerJoin.
+	behindInner := innerJoin addOutgoingNode: (FBTask named: 'behind inner').
+	b := outer addOutgoingNode: (FBTask named: 'b').
+	outerJoin := FBAndJoin named: 'outer join'.
+	behindInner --> outerJoin.
+	b --> outerJoin.
+	after := outerJoin addOutgoingNode: (FBTask named: 'after').
+	after addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: 1.
+
+	outerPass := (instance activationOfNode: b) token split.
+	self assert: outerPass node identicalTo: outer.
+	self assert: outerPass branchCount equals: 2.
+	self assert: outerPass outer isNil.
+	self assert: (instance activationOfNode: a1) token split node identicalTo: inner.
+	self assert: (instance activationOfNode: a1) token split outer identicalTo: outerPass.
+	self assert: (instance activationOfNode: behindInner) token split identicalTo: outerPass.
+	self assert: (instance activationOfNode: after) token split isNil.
+	self assert: (instance activationOfNode: after) token splitId isNil
 ]

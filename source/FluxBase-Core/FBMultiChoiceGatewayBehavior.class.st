@@ -8,15 +8,16 @@ Class {
 
 { #category : 'execution' }
 FBMultiChoiceGatewayBehavior >> execute [
-	| splitId matchingTransitions |
+	"like FBAndSplitBehavior, for the branches whose condition holds: the pass counts
+	those, so the join behind it waits for exactly the strands that were started"
+	| matchingTransitions split |
 	activation value: self argument.
 	activation done.
-	splitId := FBIdGenerator current newId.
 	matchingTransitions := activation node outgoing select: [ :t | activation transitionMatches: t ].
-	activation instance registerExpectedBranchCount: matchingTransitions size forSplitId: splitId.
+	split := FBSplitExecution openedBy: activation branchCount: matchingTransitions size.
 	matchingTransitions do: [ :transition |
 		activation followTransition: transition withToken: (
 			activation childToken
-				splitId: splitId;
+				split: split;
 				yourself) ]
 ]

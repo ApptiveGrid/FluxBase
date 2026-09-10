@@ -31,7 +31,7 @@ FBBaseActivation >> childToken [
 	^ FBToken new
 		parent: self token;
 		scope: self token scope;
-		splitId: self token splitId;
+		split: self token split;
 		yourself
 ]
 
@@ -105,8 +105,17 @@ FBBaseActivation >> followAll: aCollection [
 
 { #category : 'as yet unclassified' }
 FBBaseActivation >> followAllOutgoing [
+	self followAllOutgoingInSplit: self token split
+]
+
+{ #category : 'as yet unclassified' }
+FBBaseActivation >> followAllOutgoingInSplit: aSplitExecution [
+	"follow every transition out of my node on a child token that is a branch of
+	aSplitExecution: my own pass for an ordinary node (#followAllOutgoing), the
+	enclosing pass for a join, which closes the one its arrivals belonged to
+	(FBJoinBehavior>>execute)"
 	(self node effectiveOutgoingFor: self) do: [ :transition |
-		 self followTransition: transition ]
+		self followTransition: transition withToken: (self childToken split: aSplitExecution; yourself) ]
 ]
 
 { #category : 'as yet unclassified' }

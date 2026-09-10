@@ -4,8 +4,8 @@ tracks a single strand of execution, I bound a set of them: everything that runs
 me ends, at the latest, when I end - and once cancellation exists, is cancelled together.
 
 Scopes answer 'what falls together'. That is a different question from the one a
-split's #splitId answers - 'who is expected at the join' - and a split therefore opens
-no scope of its own. Three things do:
+split's pass answers (FBSplitExecution) - 'who is expected at the join' - and a split
+therefore opens no scope of its own. Three things do:
 
 	the flow instance		its root scope, there from the moment it has an executor
 				(FBFlowInstance>>initializeExecutor), owned by nothing

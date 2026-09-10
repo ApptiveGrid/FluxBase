@@ -10,7 +10,6 @@ Class {
 		'activations',
 		'metadata',
 		'joinStates',
-		'splitBranchCounts',
 		'subFlowInstances',
 		'scope',
 		'waitingRegistry'
@@ -213,10 +212,9 @@ FBFlowInstance >> ended [
 	event log and for whoever observes me. An instance in #error does not get here: it
 	stopped, and what it left behind is what there is to look at.
 
-	What is bookkeeping of the run and not of the result falls here. #joinStates and
-	#splitBranchCounts grow by one entry per pass through a split - every iteration of a
-	loop or a parallel scope is its own split execution - and nothing could remove them
-	before, since a join cannot tell on its own whether a further arrival may still
+	What is bookkeeping of the run and not of the result falls here. #joinStates grows
+	by one entry per pass through a split - every iteration of a loop or a parallel
+	scope is its own split execution - and nothing could remove them before, since a join cannot tell on its own whether a further arrival may still
 	come (the latch in FBJoinBehavior>>execute exists for exactly that). Once nothing
 	runs, nothing arrives. The waiting registry falls with them: an address of mine names
 	a wait, and there is none left - an entry whose wait was resumed went with the resume
@@ -230,7 +228,6 @@ FBFlowInstance >> ended [
 
 	self hasEnded ifTrue: [ ^ self ].
 	joinStates := nil.
-	splitBranchCounts := nil.
 	waitingRegistry := nil.
 	self addEvent: FBFlowInstanceEnded new
 ]
@@ -290,12 +287,6 @@ FBFlowInstance >> executors [
 		stack addFirst: current.
 		current := current suspendedExecutor ].
 	^ stack
-]
-
-{ #category : 'as yet unclassified' }
-FBFlowInstance >> expectedBranchCountFor: aSplitId [
-	splitBranchCounts ifNil: [ ^ nil ].
-	^ splitBranchCounts at: aSplitId ifAbsent: [ nil ]
 ]
 
 { #category : 'accessing' }
@@ -383,30 +374,35 @@ FBFlowInstance >> isRootExecutor [
 ]
 
 { #category : 'executing' }
-FBFlowInstance >> joinStateFor: aNode splitId: aSplitId [
-	"the join state of one split execution, made without a scope - for callers that have
-	none at hand. The engine goes through #joinStateFor:splitId:inScope:"
-	^ self joinStateFor: aNode splitId: aSplitId inScope: nil
+FBFlowInstance >> joinStateFor: aNode split: aSplitExecution [
+	"the join state of one pass through a split, in the scope that pass runs in - for
+	callers outside a step. The engine goes through #joinStateFor:split:inScope:"
+	^ self joinStateFor: aNode split: aSplitExecution inScope: (aSplitExecution ifNotNil: [ :each | each scope ])
 ]
 
 { #category : 'executing' }
-FBFlowInstance >> joinStateFor: aNode splitId: aSplitId inScope: aScope [
-	"the join state under which aNode collects the arrivals of one split execution,
-	made on first ask. aScope is the scope that execution ran in, kept on the state so
-	that it falls with the scope (#scopeEnded:) rather than with the whole instance"
-	| registeredCount |
+FBFlowInstance >> joinStateFor: aNode split: aSplitExecution inScope: aScope [
+	"the join state under which aNode collects the arrivals of one pass through a split,
+	made on first ask and keyed by the pass (FBSplitExecution) - a loop's second pass
+	through the same split gets its own. What the join waits for is what the split
+	started: its #branchCount. aScope is the scope the arrival runs in, kept on the
+	state so that it falls with the scope (#scopeEnded:) rather than with the whole
+	instance.
+
+	An arrival on a token persisted before splits were objects carries no split: those
+	key on nil - one state per join for all of them - and expect the join's incoming
+	transitions, the answer that stood before"
 	joinStates ifNil: [ joinStates := Dictionary new ].
 	^ joinStates
-		at: { aNode. aSplitId }
-		ifAbsentPut: [ 
-			registeredCount := self expectedBranchCountFor: aSplitId.
+		at: { aNode. aSplitExecution }
+		ifAbsentPut: [
 			FBJoinState new
 				joinNode: aNode;
-				splitId: aSplitId;
+				split: aSplitExecution;
 				scope: aScope;
-				expected: (registeredCount
+				expected: (aSplitExecution
 					ifNil: [ aNode incoming asOrderedCollection ]
-					ifNotNil: [ Array new: registeredCount ]);
+					ifNotNil: [ :each | Array new: each branchCount ]);
 				yourself ]
 ]
 
@@ -517,12 +513,6 @@ FBFlowInstance >> pushExecutor: anExecutor [
 		flowInstance: self;
 		suspendedExecutor: executor;
 		yourself
-]
-
-{ #category : 'as yet unclassified' }
-FBFlowInstance >> registerExpectedBranchCount: aCount forSplitId: aSplitId [
-	splitBranchCounts ifNil: [ splitBranchCounts := Dictionary new ].
-	splitBranchCounts at: aSplitId put: aCount
 ]
 
 { #category : 'executing' }
