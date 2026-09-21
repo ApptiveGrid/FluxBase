@@ -22,6 +22,45 @@ FBParallelExecutorTest >> testAddPendingKeepsTheTokenTheTransitionWasQueuedWith 
 ]
 
 { #category : 'as yet unclassified' }
+FBParallelExecutorTest >> testAFinishedScopeReadsItsOwnForkWhileAnotherPassRuns [
+	"A fork that two strands enter opens two scopes one after the other, and the body node
+	gets one activation per scope. Asked for its output, the first scope's executor looked
+	its fork up again and found the newest activation of that node - the running second
+	scope's, which is not done - so instead of answering the value of a closed scope it
+	answered the slot of its own last iteration. The same activation then said one thing
+	while the second pass ran and another once everything was over.
+
+	A scope's fork is its own: what a finished scope answers does not depend on whether
+	another pass through the same fork happens to be running"
+
+	| start split fork body reader flow instance readings after |
+	readings := OrderedCollection new.
+	start := FBStartEvent new.
+	split := start addOutgoingNode: ((FBPluggableTask named: 'split') block: [ :act |
+		act value: act argument ]).
+	fork := split addOutgoingNode: (FBParallelNode named: 'fork').
+	"a second transition into the same fork: the loop runs twice"
+	split addOutgoing: (FBTransition source: split target: fork).
+	body := fork addOutgoingNode: ((FBPluggableTask named: 'body') block: [ :act |
+		act value: act argument , '*' ]).
+	reader := body addOutgoingNode: ((FBPluggableTask named: 'reader') block: [ :act |
+		| firstBody |
+		firstBody := act flowInstance activations detect: [ :each | each node = body ].
+		"only what a scope other than the one that made it reads is at stake here"
+		firstBody executor == act executor ifFalse: [ readings add: firstBody output ].
+		act value: act argument ]).
+	reader addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance executeWith: #( 'a' 'b' 'c' ).
+
+	self assert: instance state equals: #done.
+	after := (instance activations detect: [ :each | each node = body ]) output.
+	self assert: readings size equals: 3.
+	readings do: [ :each | self assert: each equals: after ]
+]
+
+{ #category : 'as yet unclassified' }
 FBParallelExecutorTest >> testScopeBodyIsQueuedWithTheForksOwnChildToken [
 	"the body of a parallel scope is queued by the executor itself rather than by an
 	activation following its outgoing transitions, so nothing hands it a token. The
