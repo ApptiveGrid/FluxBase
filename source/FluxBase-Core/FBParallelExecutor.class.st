@@ -9,7 +9,8 @@ Class {
 		'iterationScope',
 		'iterationScopeIndex',
 		'openIterationScopes',
-		'current'
+		'current',
+		'forkActivation'
 	],
 	#category : 'FluxBase-Core-Model',
 	#package : 'FluxBase-Core',
@@ -37,6 +38,28 @@ FBParallelExecutor >> activateTransition: aTransition with: value token: aToken 
 	aToken ifNotNil: [ :token | activation token: token ].
 	activation argument: value.
 	self activate: activation
+]
+
+{ #category : 'accessing' }
+FBParallelExecutor >> activationOf: aFBNode [
+	"my fork's activation is mine to keep, not to look up again. A node has one activation
+	per pass through the same fork, so the newest activation of my fork is only mine while
+	my scope is the one running: once my scope is over, that one is a later pass's.
+	Answering it made a finished scope read a running one's fork - #outputFor: asks
+	whether the loop is over, was told 'no' by another loop, and answered the slot of its
+	own last iteration instead of its first value. The same activation then said one thing
+	while the second pass ran and another once everything was over (reported 2026-09-18).
+
+	Resolved on first use rather than handed in at construction: at that moment - the
+	first step of my own scope, through #scopeToken - the newest activation of my fork is
+	mine, since a second pass through it cannot start before I am popped. An executor
+	persisted before this field existed resolves it the same way when it runs on.
+
+	Every other node is looked up as before, and for those the newest one is right: only a
+	live scope looks a node up, and its own activations are the newest there are"
+
+	aFBNode = node ifFalse: [ ^ super activationOf: aFBNode ].
+	^ forkActivation ifNil: [ forkActivation := super activationOf: aFBNode ]
 ]
 
 { #category : 'accessing' }
