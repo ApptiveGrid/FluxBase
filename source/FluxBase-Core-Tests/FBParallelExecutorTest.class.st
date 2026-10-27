@@ -470,3 +470,28 @@ FBParallelExecutorTest >> testARefusedTransitionLeavesTheIterationsWorkQueued [
 	self deny: (instance events anySatisfy: [ :each |
 		(each isKindOf: FBTransitionFollowed) and: [ each transition target == body and: [ each value = 2 ] ] ])
 ]
+
+{ #category : 'tests' }
+FBParallelExecutorTest >> testAStepFailedInsideALoopFailsTheNextBodyThatStarts [
+	"inside a loop the next step may start no node: the first iteration's body is
+	filtered by its condition. That step is taken as it is, and it is the body of the
+	second iteration that fails, without running"
+	| ran start fork body flow instance |
+	ran := OrderedCollection new.
+	start := FBStartEvent new.
+	fork := start addOutgoingNode: (FBParallelNode named: 'fork').
+	body := (FBPluggableTask named: 'body') block: [ :act | ran add: act argument. act value: act argument ].
+	fork --> (body when: [ :x | x > 1 ]).
+	(body addOutgoingNode: (FBParallelJoinNode named: 'scope join')) addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance initialValue: #( 1 2 3 ).
+	[ instance executor isParallel ] whileFalse: [ instance step ].
+
+	self assert: (instance failNext: 'lost').
+
+	self assert: ran isEmpty.
+	self assert: instance executor currentIteration equals: 2.
+	self assert: (instance activations detect: [ :each | each node == body ]) state equals: #error.
+	self assert: instance state equals: #error
+]

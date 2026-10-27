@@ -296,6 +296,41 @@ FBFlowInstance >> executors [
 	^ stack
 ]
 
+{ #category : 'executing' }
+FBFlowInstance >> failNext: aString [
+	"take my next step as one whose node fails with aString, without running the node -
+	for the one who drives me and lost a step to an error that was not its node's: the
+	step is gone, and what is left to say is that I stopped where it was. The step goes
+	the whole way a step goes whose node throws (#activateProtected:): its activation is
+	errored and says aString in my events, I read #error, and a sub flow I am in ends the
+	way an errored sub flow ends - behind its caller's #error transition, if one is
+	modelled.
+
+	The node is stopped in the moment it is announced as started, by the FBError a node
+	signals itself when it fails, so nothing of it runs. That is why this listens rather
+	than asks: a step that goes through has nothing to check on its way, and whatever
+	fails it is here. The subscriptions are to the instances a step can start a node in,
+	and they last for the step. A step that starts no node - a branch inside a loop
+	whose condition does not hold - is taken as it is, and the next one is tried.
+
+	Answers whether a node failed, false when nothing was left to step"
+
+	| failed failing |
+	self initializeExecutor.
+	failed := false.
+	failing := [ :event |
+		failed ifFalse: [
+			failed := true.
+			FBError signal: aString ] ].
+	[ failed or: [ self executor hasPending not ] ] whileFalse: [
+		| subscriptions |
+		subscriptions := self activeFlowInstances collect: [ :each |
+			each -> (each whenAnnounced: FBNodeActivationStarted do: failing) ].
+		[ self step ] ensure: [
+			subscriptions do: [ :each | each key announcer removeSubscription: each value ] ] ].
+	^ failed
+]
+
 { #category : 'accessing' }
 FBFlowInstance >> flow [
 	^ flow
@@ -831,9 +866,10 @@ FBFlowInstance >> waitingSpotsOpenedDuring: aBlock [
 
 { #category : 'as yet unclassified' }
 FBFlowInstance >> whenAnnounced: aClass do: aBlock [
+	"answers the subscription, so that it can be taken back (#failNext:)"
 
 	announcer ifNil: [ announcer := Announcer new ].
-	announcer when: aClass do: aBlock for: aBlock receiver
+	^ announcer when: aClass do: aBlock for: aBlock receiver
 ]
 
 { #category : 'executing' }
