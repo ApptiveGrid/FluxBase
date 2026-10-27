@@ -328,3 +328,64 @@ FBSubFlowNodeTest >> testIterationsOfAParallelNodeDoNotCountAsCallDepth [
         self assert: child scope depth equals: 2.
         self assert: child scope outer ownerNode identicalTo: fork ]
 ]
+
+{ #category : 'private' }
+FBSubFlowNodeTest >> childFlowWithATaskThat: aBlock [
+    "a flow shaped start -> 'child task', which runs aBlock -> end"
+    | childStart |
+    childStart := FBStartEvent new.
+    (childStart addOutgoingNode: ((FBPluggableTask named: 'child task') block: [ :act |
+        aBlock value.
+        act value: 1 ]))
+        addOutgoingNode: FBEndEvent new.
+    ^ FBFlow new start: childStart
+]
+
+{ #category : 'tests' }
+FBSubFlowNodeTest >> testAStepFailedInsideASubFlowFailsItsCaller [
+    "the next node lies in the sub flow: it is the child's that fails, and the caller
+    fails with it, the way the caller of an errored sub flow without an #error
+    transition does"
+    | ran instance child |
+    ran := false.
+    instance := (self flowCalling: (self childFlowWithATaskThat: [ ran := true ])) newInstance.
+    instance initialValue: 1.
+    [ instance executor isSubFlow ] whileFalse: [ instance step ].
+    child := instance executor childInstance.
+    "the child's start"
+    instance step.
+
+    self assert: (instance failNext: 'lost').
+    instance execute.
+
+    self deny: ran.
+    self assert: (child activations detect: [ :each | each node name = 'child task' ]) state equals: #error.
+    self assert: child state equals: #error.
+    self assert: instance state equals: #error
+]
+
+{ #category : 'tests' }
+FBSubFlowNodeTest >> testAStepFailedInsideASubFlowFollowsTheCallersErrorTransition [
+    "a step that failed is a node that failed, also for a caller that models what to do
+    when its sub flow errors: it goes on behind its #error transition"
+    | ran parentStart subNode onError parentFlow instance |
+    ran := false.
+    parentStart := FBStartEvent new.
+    subNode := parentStart addOutgoingNode: FBSubFlowNode new.
+    subNode subFlow: (self childFlowWithATaskThat: [ ran := true ]).
+    onError := FBEndEvent new.
+    subNode --> (FBEndEvent new resultTransition: #success).
+    subNode --> (onError resultTransition: #error).
+    parentFlow := FBFlow new start: parentStart.
+    instance := parentFlow newInstance.
+    instance initialValue: 1.
+    [ instance executor isSubFlow ] whileFalse: [ instance step ].
+    instance step.
+
+    self assert: (instance failNext: 'lost').
+    instance execute.
+
+    self deny: ran.
+    self assert: instance state equals: #done.
+    self assert: (instance rootExecutor activationOf: onError) node equals: onError
+]

@@ -448,6 +448,58 @@ FBFlowInstanceTest >> testStateInvariantsHoldAcrossASubFlowInsideAParallelScope 
 ]
 
 { #category : 'tests' }
+FBFlowInstanceTest >> testAFailedStepLeavesItsNodeErroredWithoutRunningIt [
+	"what a driver does when a step was lost to an error that was not its node's: the
+	next node gets its activation, errored with the message and with the same events a
+	node that throws leaves - started, then errored - but it does not run, and the
+	instance reads #error. Nothing listens any more afterwards"
+	| ran start task flow instance activation |
+	ran := false.
+	start := FBStartEvent new.
+	task := start addOutgoingNode: ((FBPluggableTask named: 'task') block: [ :act |
+		ran := true.
+		act value: 1 ]).
+	task addOutgoingNode: FBEndEvent new.
+	flow := FBFlow new start: start.
+	instance := flow newInstance.
+	instance initialValue: 7.
+	instance step.
+
+	self assert: (instance failNext: 'lost').
+
+	self deny: ran.
+	self assert: instance state equals: #error.
+	activation := instance activations detect: [ :each | each node == task ].
+	self assert: activation state equals: #error.
+	self
+		assert: ((instance eventsOfActivation: activation) collect: [ :each | each class ]) asArray
+		equals: { FBNodeActivationStarted. FBNodeActivationErrored }.
+	self
+		assert: (instance eventsOfActivation: activation) last message
+		equals: 'activation finished with error: lost'.
+	self deny: instance executor hasPending.
+	self assert: instance announcer subscriptions subscriptions isEmpty
+]
+
+{ #category : 'tests' }
+FBFlowInstanceTest >> testAnInstanceWithNoStepLeftHasNoStepToFail [
+	"over, or waiting for an impulse from outside: there is no next node, nothing is
+	marked and the instance reads as before"
+	| done waiting |
+	done := FBFlow simpleFlow newInstance.
+	done executeWith: 7.
+	waiting := FBFlow simpleWaitFlow newInstance.
+	waiting executeWith: 2.
+
+	self deny: (done failNext: 'lost').
+	self deny: (waiting failNext: 'lost').
+
+	self assert: done state equals: #done.
+	self assert: waiting state equals: #waiting.
+	self deny: (done hasErrors or: [ waiting hasErrors ])
+]
+
+{ #category : 'tests' }
 FBFlowInstanceTest >> testStateInvariantsHoldAcrossAWaitInsideASubFlow [
 	| childStart childFlow start subNode flow instance wait |
 	childStart := FBStartEvent new.
