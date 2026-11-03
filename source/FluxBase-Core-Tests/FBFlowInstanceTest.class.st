@@ -200,6 +200,19 @@ FBFlowInstanceTest >> testInstanceStateWaiting [
 ]
 
 { #category : 'tests' }
+FBFlowInstanceTest >> testInstanceStateWithoutActivations [
+	"an instance stored in an older form comes back with activations nil; asking its
+	state answered a DNU, and a listing of the flow's instances a 500"
+	| flowInstance |
+	flowInstance := FBFlow simpleFlow newInstance.
+	flowInstance initialValue: 7.
+	flowInstance execute.
+	flowInstance instVarNamed: 'activations' put: nil.
+	self deny: flowInstance hasErrors.
+	self assert: flowInstance state equals: #done
+]
+
+{ #category : 'tests' }
 FBFlowInstanceTest >> testListActivationEvents [
 	| flowInstance events |
 	flowInstance := FBFlow simpleFlow newInstance.

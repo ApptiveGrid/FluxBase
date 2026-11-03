@@ -348,9 +348,12 @@ FBFlowInstance >> hasErrors [
 	the fact belongs here, not on the executor: FBBaseExecutor>>hasErrors answers it
 	from #activations, which is this instance's one collection shared by all of its
 	executors - so every executor answered identically, and #state used to loop over
-	the whole stack asking the same question once per executor"
+	the whole stack asking the same question once per executor.
 
-	^ activations anySatisfy: [ :each | each hasError ]
+	an instance stored in an older form has no activations here (nil). It reads as an
+	instance without errors, so #state and every listing of it still answer"
+
+	^ activations notNil and: [ activations anySatisfy: [ :each | each hasError ] ]
 ]
 
 { #category : 'accessing' }
