@@ -535,3 +535,18 @@ FBFlowInstanceTest >> testStateInvariantsHoldAcrossAWaitInsideASubFlow [
 	self runCheckingInvariants: instance.
 	self assert: instance state equals: #done
 ]
+
+{ #category : 'tests' }
+FBFlowInstanceTest >> testActivationsOfAnInstanceStoredWithout [
+	"an instance stored in an older form comes back with activations nil. Every reader
+	walks its activations - the step list of the instance in apptive-base answered a DNU
+	#do: and a 500 - so it answers none, without writing them"
+	| flowInstance |
+	flowInstance := FBFlow simpleFlow newInstance.
+	flowInstance initialValue: 7.
+	flowInstance execute.
+	flowInstance instVarNamed: 'activations' put: nil.
+
+	self assert: flowInstance activations isEmpty.
+	self assert: (flowInstance instVarNamed: 'activations') isNil
+]
